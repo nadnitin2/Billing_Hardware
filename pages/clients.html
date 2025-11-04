@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clients</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script type="module" src="../scripts/clients.js"></script>
+  <script type="module" src="../scripts/auth-check.js"></script>
+  <style>
+    .transaction-row:hover { background-color: #f8f9fa; cursor: pointer; }
+    .cancelled-amount { text-decoration: line-through; color: #999; }
+    .badge-small { font-size: 0.7rem; }
+  </style>
+</head>
+<body>
+  <!-- Bootstrap Loading Overlay -->
+  <div id="globalLoader" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-90" style="z-index: 9999;">
+    <div class="d-flex flex-column align-items-center justify-content-center h-100">
+      <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-3 fw-bold text-primary" id="loaderText">Loading...</p>
+    </div>
+  </div>
+
+  <div class="container py-4">
+    <h3 class="mb-4">Client Management</h3>
+
+    <!-- Add Client Form -->
+    <form id="addClientForm" class="row g-3 mb-4">
+      <div class="col-md-3">
+        <input type="text" class="form-control" id="clientName" placeholder="Client Name" required>
+      </div>
+      <div class="col-md-3">
+        <input type="text" class="form-control" id="contact" placeholder="Contact No">
+      </div>
+      <div class="col-md-4">
+        <input type="text" class="form-control" id="address" placeholder="Address">
+      </div>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-success">Add Client</button>
+      </div>
+    </form>
+
+    <!-- Client Table with Search -->
+    <div class="table-responsive">
+      <div class="input-group mb-3" style="max-width: 400px;">
+        <span class="input-group-text">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+          </svg>
+        </span>
+        <input type="text" id="clientSearch" class="form-control form-control-sm" placeholder="Search by Name, Mobile, Account No...">
+      </div>
+
+      <table class="table table-bordered table-striped">
+        <thead class="table-light">
+          <tr>
+            <th>Account No.</th>
+            <th>Name</th>
+            <th>Contact</th>
+            <th>Address</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="clientTable"></tbody>
+      </table>
+    </div>
+
+    <!-- Transaction History Section -->
+    <div id="transactionSection" class="mt-5" style="display: none;">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5>Transaction History - <span id="histClientName" class="text-primary"></span></h5>
+        <div>
+          <button class="btn btn-outline-primary btn-sm me-2" id="downloadPDF">PDF</button>
+          <button class="btn btn-outline-success btn-sm" id="downloadExcel">Excel</button>
+        </div>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-md-3">
+          <label class="form-label small">From Date</label>
+          <input type="date" id="fromDate" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">To Date</label>
+          <input type="date" id="toDate" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2 d-grid align-self-end">
+          <button class="btn btn-primary btn-sm" id="applyFilter">Apply Filter</button>
+        </div>
+        <div class="col-md-2 d-grid align-self-end">
+          <button class="btn btn-secondary btn-sm" id="clearFilter">Clear</button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Invoice</th>
+              <th>Amount</th>
+              <th>Mode</th>
+              <th>Txn ID</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody id="transactionTableBody">
+            <tr>
+              <td colspan="6" class="text-center text-muted">Select a client to view transactions</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
+
+  <script type="module">
+    import { auth } from "./firebase-config.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        alert("Please login first");
+        window.location.href = "../login.html";
+      }
+    });
+  </script>
+</body>
+</html>
