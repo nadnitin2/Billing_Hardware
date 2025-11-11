@@ -652,11 +652,44 @@ document.getElementById("recordPayment").addEventListener("click", async () => {
 
 
 /* ========================= CANCEL INVOICE (optional) ========================= */
+
 window.cancelInvoice = async (invoiceId) => {
-  if (!confirm('Cancel this invoice?')) return;
+  if (!confirm('Cancel this invoice? This will restore stock quantities.')) return;
+
   const ref = doc(db, 'invoices', invoiceId);
-  await updateDoc(ref, { cancelled: true });
-  loadInvoices();
+
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error("Invoice not found!");
+    const inv = snap.data();
+
+    if (inv.cancelled) return alert("Invoice is already cancelled.");
+
+    // 1. Restore Stock
+    for (const item of inv.items) {
+      const stDoc = doc(stockCol, item.id);
+      const stSnap = await getDoc(stDoc);
+
+      if (stSnap.exists()) {
+        const currentQty = stSnap.data().qty || 0;
+        const newQty = currentQty + item.qty; // Restore the quantity
+        await updateDoc(stDoc, { qty: newQty });
+      }
+    }
+
+
+    await updateDoc(ref, {
+      cancelled: true,
+      cancelledDate: new Date().toISOString().split('T')[0] // Optional: Record cancel date
+    });
+
+    alert(`Invoice ${inv.invoiceNo} cancelled and stock restored successfully.`);
+    loadInvoices(); // Reload the list
+
+  } catch (err) {
+    console.error("Cancellation Error:", err);
+    alert("Error cancelling invoice: " + err.message);
+  }
 };
 
 /* ========================= SAVE INVOICE ========================= */
