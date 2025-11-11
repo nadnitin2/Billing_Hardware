@@ -265,6 +265,27 @@ window.viewInvoice = async (invoiceId) => {
         <p><strong>Pending:</strong> ₹${pending.toFixed(2)}</p>
         <h6><strong>Payable:</strong> ₹${Number(inv.payable).toFixed(2)}</h6>
       </div>
+      
+      <div class="mt-4">
+        <strong>Terms & Conditions:</strong>
+        <ol class="small ps-4">
+          <li>Goods once sold will not be taken back.</li>
+          <li>Warranty as per manufacturer only.</li>
+          <li>Please check items before leaving counter.</li>
+          <li>All disputes subject to Latur jurisdiction only.</li>
+        </ol>
+      </div>
+
+      <div class="d-flex justify-content-between mt-5">
+        <div class="text-center">
+          <div style="border:1px dashed #999; height:60px; width:160px;"></div>
+          <p class="mt-2"><strong>Stamp</strong></p>
+        </div>
+        <div class="text-center">
+          <div style="border-bottom:2px solid #000; width:160px;"></div>
+          <p class="mt-2"><strong>Authorized Signature</strong></p>
+        </div>
+      </div>
     </div>`;
 
   const win = window.open('', '_blank', 'width=900,height=700');
@@ -361,6 +382,27 @@ window.printInvoice = async (invoiceId) => {
           <p><strong>Pending:</strong> ₹${pending.toFixed(2)}</p>
           <h6><strong>Payable:</strong> ₹${Number(inv.payable).toFixed(2)}</h6>
         </div>
+
+        <div class="mt-4" style="page-break-before: auto;">
+          <strong>Terms & Conditions:</strong>
+          <ol class="small ps-4">
+            <li>Goods once sold will not be taken back.</li>
+            <li>Warranty as per manufacturer only.</li>
+            <li>Please check items before leaving counter.</li>
+            <li>All disputes subject to Latur jurisdiction only.</li>
+          </ol>
+        </div>
+
+        <div class="d-flex justify-content-between mt-5">
+          <div class="text-center">
+            <div style="border:1px dashed #999; height:60px; width:160px;"></div>
+            <p class="mt-2"><strong>Stamp</strong></p>
+          </div>
+          <div class="text-center">
+            <div style="border-bottom:2px solid #000; width:160px;"></div>
+            <p class="mt-2"><strong>Authorized Signature</strong></p>
+          </div>
+        </div>
       </div>
     </body>
     </html>`;
@@ -445,7 +487,7 @@ window.downloadPDF = async (invoiceId, btn) => {
                   <td>${it.unit || 'pcs'}</td>
                   <td>${it.qty}</td>
                   <td>₹${it.rate}</td>
-                  <td>${it.discount}%</td>
+                  <td>₹${it.discount}%</td>
                   <td class="text-end">₹${(it.qty * it.rate * (1 - it.discount / 100)).toFixed(2)}</td>
                 </tr>
               `).join('')}
@@ -660,7 +702,7 @@ async function saveInvoiceHandler(e) {
       paidAmount: 0,
       payments: [],
       cleared: false,
-      gstRate: gstRatePercent          // 0 when without GST
+      gstRate: gstRatePercent        // 0 when without GST
     };
 
     // ---- save invoice ----
