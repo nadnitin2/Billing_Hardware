@@ -5,11 +5,9 @@
   <title>KUBER ONE - Reports</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
-  <!-- Bootstrap 5 + Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
-  <!-- Firebase + Libraries -->
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -153,7 +151,6 @@
 
 <div class="container-fluid">
 
-  <!-- Header -->
   <div class="text-center mb-5">
     <h1 class="display-5 fw-bold" style="color: var(--primary);">
       KUBER<span style="color: var(--secondary);">ONE</span> Reports
@@ -161,7 +158,6 @@
     <p class="text-muted">Kuber Hardware - Complete Business Insights</p>
   </div>
 
-  <!-- Daily Summary -->
   <div class="report-card">
     <div class="card-header">
       <span>Daily Summary</span>
@@ -201,7 +197,6 @@
     </div>
   </div>
 
-  <!-- Client-wise Report -->
   <div class="report-card">
     <div class="card-header">
       <span>Client-wise Report</span>
@@ -246,10 +241,9 @@
     </div>
   </div>
 
-  <!-- Item-wise Sales -->
   <div class="report-card">
     <div class="card-header">
-      <span>Item-wise Sales</span>
+      <span>Item-wise Sales (GST Report)</span>
       <i class="bi bi-box-seam"></i>
     </div>
     <div class="card-body">
@@ -257,8 +251,8 @@
         <input type="date" id="itemFromDate" class="form-control" style="width:160px;">
         <input type="date" id="itemToDate" class="form-control" style="width:160px;">
         <button class="btn btn-primary" onclick="loadItemReport()">Load</button>
-        <button class="btn btn-success" onclick="downloadTableToExcel('itemReportTable', 'Item_Sales')">Excel</button>
-        <button class="btn btn-danger" onclick="downloadTableToPDF('itemReportTable', 'Item_Sales')">PDF</button>
+        <button class="btn btn-success" onclick="downloadTableToExcel('itemReportTable', 'Item_Sales_GST')">Excel</button>
+        <button class="btn btn-danger" onclick="downloadTableToPDF('itemReportTable', 'Item_Sales_GST')">PDF</button>
       </div>
       <div class="table-responsive">
         <table id="itemReportTable" class="table table-hover">
@@ -267,19 +261,20 @@
               <th>Item (Brand)</th>
               <th>Qty</th>
               <th>Unit</th>
+              <th>Sale Value (Excl. GST)</th>
               <th>GST %</th>
-              <th>Total Sale</th>
+              <th>GST Amount</th>
+              <th>Total Sale (Incl. GST)</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td colspan="5" class="text-center text-muted py-4">Select dates to view sales</td></tr>
+            <tr><td colspan="7" class="text-center text-muted py-4">Select dates to view sales</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Outstanding -->
   <div class="report-card">
     <div class="card-header">
       <span>Outstanding Invoices</span>
@@ -324,7 +319,6 @@
     </div>
   </div>
 
-  <!-- CANCELLED INVOICES -->
   <div class="report-card cancelled-table">
     <div class="card-header" style="background: var(--danger);">
       <span>CANCELLED Invoices</span>
@@ -368,7 +362,6 @@
 
 </div>
 
-<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
@@ -388,6 +381,13 @@
   // Helper: Get GST % with fallback
   function getGstPercent(inv) {
     return (typeof inv.gstRate === 'number' ? inv.gstRate : 18) + '%';
+  }
+  
+  // Helper: Calculate GST Amount
+  function calculateGSTAmount(subtotal, gstRate) {
+    if (!subtotal || subtotal <= 0) return 0;
+    const rate = (typeof gstRate === 'number' ? gstRate : 18) / 100;
+    return subtotal * rate;
   }
 
   // Reusable Loading
@@ -556,12 +556,12 @@
     `);
   }
 
-  // Item Report
+  // Item Report (Updated for GST)
   async function loadItemReport() {
-    showLoading('itemReportTable', 5);
+    showLoading('itemReportTable', 7);
     const from = document.getElementById('itemFromDate').value;
     const to = document.getElementById('itemToDate').value;
-    const map = {};
+    const map = {}; // key: item_name|unit|gst_rate
     let q = db.collection('invoices');
     if (from) q = q.where('date', '>=', from);
     if (to) q = q.where('date', '<=', to);
@@ -574,25 +574,65 @@
       const d = doc.data();
       if (d.cancelled) return;
 
-      const gstPct = getGstPercent(d);
+      const invoiceGstRate = typeof d.gstRate === 'number' ? d.gstRate : 18;
+      const gstRatePercent = invoiceGstRate + '%';
 
       (d.items || []).forEach(i => {
-        const key = `${i.name}|${i.unit || 'pcs'}|${gstPct}`;
-        if (!map[key]) map[key] = { qty: 0, total: 0, gst: gstPct };
+        // Calculate item subtotal (excluding discount/GST)
+        const itemSubtotal = i.qty * i.rate;
+        const netValue = itemSubtotal * (1 - (i.discount || 0) / 100);
+        
+        // Calculate GST amount for the item
+        const itemGSTAmount = calculateGSTAmount(netValue, invoiceGstRate);
+        const totalValue = netValue + itemGSTAmount;
+
+
+        const key = `${i.name} (${i.brand || 'N/A'})|${i.unit || 'pcs'}|${invoiceGstRate}`;
+        if (!map[key]) map[key] = { qty: 0, netValue: 0, gstAmount: 0, totalValue: 0, gstRate: invoiceGstRate };
+        
         map[key].qty += i.qty;
-        map[key].total += i.qty * i.rate;
+        map[key].netValue += netValue;
+        map[key].gstAmount += itemGSTAmount;
+        map[key].totalValue += totalValue;
       });
     });
 
+    let overallNetTotal = 0;
+    let overallGSTTotal = 0;
+    let overallTotalSale = 0;
+
     Object.entries(map).forEach(([k, v]) => {
       const [name, unit] = k.split('|').slice(0, 2);
+      
+      overallNetTotal += v.netValue;
+      overallGSTTotal += v.gstAmount;
+      overallTotalSale += v.totalValue;
+
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${name}</td><td>${v.qty}</td><td>${unit}</td><td>${v.gst}</td><td>₹${v.total.toFixed(2)}</td>`;
+      tr.innerHTML = `
+        <td>${name}</td>
+        <td>${v.qty.toFixed(2)}</td>
+        <td>${unit}</td>
+        <td>₹${v.netValue.toFixed(2)}</td>
+        <td>${v.gstRate}%</td>
+        <td>₹${v.gstAmount.toFixed(2)}</td>
+        <td>₹${v.totalValue.toFixed(2)}</td>
+      `;
       tbody.appendChild(tr);
     });
 
     if (Object.keys(map).length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No sales data</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No sales data</td></tr>';
+    } else {
+      tbody.insertAdjacentHTML('beforeend', `
+        <tr class="table-dark fw-bold">
+          <td colspan="3">Overall Totals</td>
+          <td>₹${overallNetTotal.toFixed(2)}</td>
+          <td></td>
+          <td>₹${overallGSTTotal.toFixed(2)}</td>
+          <td>₹${overallTotalSale.toFixed(2)}</td>
+        </tr>
+      `);
     }
   }
 
@@ -701,9 +741,10 @@
       styles: { fontSize: 10, cellPadding: 4 },
       headStyles: { fillColor: [30, 64, 175], textColor: 255 },
       columnStyles: { 
+        // Right align currency columns for Item Report
         3: { halign: 'right' }, 
-        4: { halign: 'right' },
-        5: { halign: 'right' }
+        5: { halign: 'right' },
+        6: { halign: 'right' }
       }
     });
     doc.save(`${filename}_${new Date().toISOString().slice(0,10)}.pdf`);
@@ -713,7 +754,6 @@
   loadClients();
 </script>
 
-<!-- Auth Check -->
 <script type="module">
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
