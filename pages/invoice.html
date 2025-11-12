@@ -1,54 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Invoice Generator</title>
 
-  <!-- Bootstrap & Select2 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
-  <!-- Scripts -->
   <script type="module" src="../scripts/invoice.js"></script>
   <script type="module" src="../scripts/auth-check.js"></script>
 
-  <!-- Firebase App -->
   <script type="module">
     import { app } from "../pages/firebase-config.js";
     window.firebaseApp = app;
   </script>
+
+  <style>
+    /* Select2 Fix for Bootstrap 5 */
+    .select2-container--default .select2-selection--single {
+      height: 38px !important;
+      padding-top: 5px;
+      padding-left: 10px;
+    }
+
+    .container {
+      max-width: 1200px;
+      /* Enhanced width for better viewing */
+    }
+
+    .form-label {
+      font-weight: 500;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+
+    .form-control,
+    .form-select {
+      font-size: 0.95rem;
+    }
+
+    .invoice-list-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      background-color: #f8f9fa;
+    }
+
+    /* Optimization for table actions */
+    .action-buttons button {
+      margin-left: 4px;
+    }
+
+    .summary-box {
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+    }
+  </style>
 </head>
-<body class="bg-light">
+
+<body>
 
   <div class="container py-4">
     <h3 class="mb-3">Invoice Generator</h3>
 
-    <!-- Invoice form -->
-    <form id="invoiceForm" class="row g-3 mb-4">
+    <form id="invoiceForm" class="row g-3 mb-4 p-3 border rounded shadow-sm bg-white">
       <div class="col-md-3">
         <label for="client" class="form-label">Client</label>
         <select id="client" class="form-select" required>
           <option value="">Select Client</option>
         </select>
       </div>
-      <div class="col-md-2 d-grid align-self-end">
-        <button type="submit" class="btn btn-success">Generate Invoice</button>
+
+      <div class="col-md-3">
+        <label for="searchClient" class="form-label">Client Info (Contact/Account)</label>
+        <input type="text" id="searchClient" class="form-control" placeholder="Contact / Account No." readonly>
       </div>
+
       <div class="col-md-2 d-grid align-self-end">
-  <div class="form-check form-check-inline">
-    <input class="form-check-input" type="radio" name="gstOption" id="gstYes" value="yes" checked>
-    <label class="form-check-label" for="gstYes">With GST</label>
-  </div>
-  <div class="form-check form-check-inline">
-    <input class="form-check-input" type="radio" name="gstOption" id="gstNo" value="no">
-    <label class="form-check-label" for="gstNo">Without GST</label>
-  </div>
-</div>
+        <label class="form-label d-block mb-1">Tax Option</label>
+        <div class="d-flex justify-content-start">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="gstOption" id="gstYes" value="yes" checked>
+            <label class="form-check-label" for="gstYes">With GST</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="gstOption" id="gstNo" value="no">
+            <label class="form-check-label" for="gstNo">Without GST</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4 d-grid align-self-end">
+        <button type="submit" class="btn btn-success"><i class="bi bi-receipt"></i> Generate Invoice</button>
+      </div>
     </form>
 
-    <!-- Item section -->
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-4 p-3 border rounded shadow-sm bg-light">
       <div class="col-md-4">
         <label for="item" class="form-label">Item (Brand)</label>
         <select id="item" class="form-select" required>
@@ -57,65 +108,103 @@
       </div>
       <div class="col-md-1">
         <label for="qty" class="form-label">Qty</label>
-        <input type="number" id="qty" class="form-control" placeholder="Qty"/>
+        <input type="number" id="qty" class="form-control" placeholder="Qty" value="1" min="1" />
       </div>
       <div class="col-md-2">
         <label for="rate" class="form-label">Rate (₹)</label>
-        <input type="number" id="rate" class="form-control" placeholder="Rate"/>
+        <input type="number" id="rate" class="form-control" placeholder="Rate" value="0.00" min="0" />
       </div>
       <div class="col-md-2">
-  <label for="itemDisc" class="form-label">Discount (%)</label>
-  <input type="number" id="itemDisc" class="form-control" placeholder="Discount" value="0"/>
-</div>
+        <label for="itemDisc" class="form-label">Discount (%)</label>
+        <input type="number" id="itemDisc" class="form-control" placeholder="Discount %" value="0" min="0" max="100" />
+      </div>
 
-<div class="col-md-2 d-grid align-self-end">
-  <button type="button" class="btn btn-primary w-100" id="addItem">
-    Add Item
-  </button>
-</div>
-    <!-- Item table -->
-    <table class="table table-bordered table-sm mb-3">
-      <thead class="table-light">
-        <tr>
-          <th>Item (Brand)</th>
-          <th>Unit</th>
-          <th>Qty</th>
-          <th>Rate</th>
-          <th>Disc (%)</th>
-          <th>Amount</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="invoiceTable"></tbody>
-    </table>
-
-    <!-- Summary -->
-    <div class="text-end mb-4 border rounded p-3 bg-white">
-      <p><strong>Subtotal:</strong> ₹<span id="subtotal">0.00</span></p>
-      <p><strong>GST (<span id="gstPercent">18</span>%) :</strong> ₹<span id="gstAmount">0.00</span></p>
-      <p><strong>Total:</strong> ₹<span id="totalAmount">0.00</span></p>
-      <h5><strong>Payable:</strong> ₹<span id="payableAmount">0.00</span></h5>
+      <div class="col-md-3 d-grid align-self-end">
+        <button type="button" class="btn btn-primary w-100" id="addItem">
+          <i class="bi bi-plus-circle"></i> Add Item
+        </button>
+      </div>
     </div>
 
-    <hr/>
-    <label for="searchClient" class="form-label">Filter by Client</label>
-    <select id="searchClient" class="form-select mb-3" onchange="loadInvoices()">
-      <option value="">Select Client</option>
-      <option value="All">All</option>
-    </select>
+    <div class="table-responsive mb-4">
+      <table class="table table-bordered table-striped table-sm">
+        <thead class="table-dark">
+          <tr>
+            <th>Item (Brand)</th>
+            <th>Unit</th>
+            <th>Qty</th>
+            <th>Rate (Excl. Disc)</th>
+            <th>Disc (%)</th>
+            <th>Net Value</th>
+            <th>GST %</th>
+            <th>GST Amt</th>
+            <th>Total Amount</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="invoiceTable">
+          <tr>
+            <td colspan="10" class="text-center text-muted">Add items above to start invoicing.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-    <!-- Invoice list -->
-    <table class="table table-bordered table-striped">
-      <thead class="table-light">
-        <tr>
-          <th>Date</th><th>Client</th><th>Items</th><th>Payable</th><th>Status</th><th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="invoiceList"></tbody>
-    </table>
+    <div class="row justify-content-end">
+      <div class="col-md-5">
+        <div class="summary-box">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr>
+                <td>**Subtotal (Taxable Value)**</td>
+                <td class="text-end fw-bold">₹<span id="subtotal">0.00</span></td>
+              </tr>
+              <tr>
+                <td>**Total GST (<span id="gstPercent">18</span>%)**</td>
+                <td class="text-end fw-bold">₹<span id="gstAmount">0.00</span></td>
+              </tr>
+              <tr class="table-info">
+                <td>**GRAND PAYABLE**</td>
+                <td class="text-end fw-bold">₹<span id="totalAmount">0.00</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <h5 class="text-end mt-2" style="display:none;">Payable: ₹<span id="payableAmount">0.00</span></h5>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-4" />
+
+    <div class="invoice-list-card">
+      <h5 class="mb-3"><i class="bi bi-list-check"></i> Recent Invoices</h5>
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <label for="searchClientList" class="form-label">Filter by Client</label>
+          <select id="searchClientList" class="form-select" onchange="loadInvoices()">
+            <option value="">Select Client</option>
+            <option value="All">All</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped table-sm align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>Date</th>
+              <th>Client</th>
+              <th>Items Count</th>
+              <th>Payable</th>
+              <th>Status</th>
+              <th style="min-width: 300px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceList"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Payment Modal -->
   <div class="modal fade" id="payModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content">
@@ -139,14 +228,12 @@
     </div>
   </div>
 
-  <!-- Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Auth Check -->
   <script type="module">
     import { app } from "../pages/firebase-config.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
@@ -163,4 +250,5 @@
     });
   </script>
 </body>
+
 </html>
