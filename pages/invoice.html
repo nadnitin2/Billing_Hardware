@@ -3,251 +3,887 @@
 
 <head>
   <meta charset="UTF-8" />
+  <title>KUBER ONE - Reports</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Invoice Generator</title>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 
-  <script type="module" src="../scripts/invoice.js"></script>
-  <script type="module" src="../scripts/auth-check.js"></script>
-
-  <script type="module">
-    import { app } from "../pages/firebase-config.js";
-    window.firebaseApp = app;
-  </script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
   <style>
-    /* Select2 Fix for Bootstrap 5 */
-    .select2-container--default .select2-selection--single {
-      height: 38px !important;
-      padding-top: 5px;
-      padding-left: 10px;
+    :root {
+      --primary: #1e40af;
+      --secondary: #f59e0b;
+      --danger: #dc3545;
+      --success: #28a745;
+      --dark: #1e293b;
+      --light: #f8fafc;
+      --warning: #f97316;
     }
 
-    .container {
-      max-width: 1200px;
-      /* Enhanced width for better viewing */
+    body {
+      background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 20px 10px;
     }
 
-    .form-label {
-      font-weight: 500;
-      margin-bottom: 5px;
-      font-size: 0.9rem;
+    .report-card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+      overflow: hidden;
+      margin-bottom: 30px;
+      transition: all 0.3s ease;
+    }
+
+    .report-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.18);
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, var(--primary), #2563eb);
+      color: white;
+      padding: 18px 24px;
+      font-weight: 700;
+      font-size: 1.2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-header .bi {
+      font-size: 1.5rem;
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 24px;
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid #e2e8f0;
     }
 
     .form-control,
     .form-select {
+      border-radius: 12px;
+      padding: 11px 16px;
+      font-size: 0.95rem;
+      border: 1.5px solid #cbd5e1;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(30, 102, 235, 0.15);
+    }
+
+    .btn {
+      border-radius: 12px;
+      font-weight: 600;
+      padding: 11px 20px;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      border: none;
+    }
+
+    .btn-success {
+      background: var(--success);
+      border: none;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      border: none;
+    }
+
+    .btn-warning {
+      background: var(--warning);
+      border: none;
+    }
+
+    .table {
+      margin: 0;
+      font-size: 0.94rem;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+
+    .table thead {
+      background: #e2e8f0;
+    }
+
+    .table th {
+      font-weight: 700;
+      color: #1e293b;
       font-size: 0.95rem;
     }
 
-    .invoice-list-card {
+    .table tbody tr:hover {
+      background: #f0f9ff;
+    }
+
+    .badge {
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+    }
+
+    .cancelled-table .table thead {
+      background: var(--danger);
+      color: white;
+    }
+
+    .cancelled-table .table tbody tr {
+      background: #fee2e2;
+      border-left: 5px solid var(--danger);
+    }
+
+    .search-results {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 300px;
+      max-height: 260px;
+      overflow-y: auto;
+      background: white;
       border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 15px;
-      background-color: #f8f9fa;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      display: none;
+      margin-top: 6px;
     }
 
-    /* Optimization for table actions */
-    .action-buttons button {
-      margin-left: 4px;
+    .search-result-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      transition: all 0.2s;
     }
 
-    .summary-box {
-      background-color: #f8f9fa;
-      border-radius: 8px;
-      padding: 15px;
+    .search-result-item:hover {
+      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    }
+
+    .search-result-name {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 1rem;
+    }
+
+    .search-result-contact {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 800;
+    }
+
+    @media (max-width: 768px) {
+      .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .btn {
+        width: 100%;
+        margin: 5px 0;
+      }
+
+      .search-results {
+        width: 100%;
+      }
     }
   </style>
 </head>
 
 <body>
 
-  <div class="container py-4">
-    <h3 class="mb-3">Invoice Generator</h3>
+  <div class="container-fluid">
 
-    <form id="invoiceForm" class="row g-3 mb-4 p-3 border rounded shadow-sm bg-white">
-      <div class="col-md-3">
-        <label for="client" class="form-label">Client</label>
-        <select id="client" class="form-select" required>
-          <option value="">Select Client</option>
-        </select>
+
+    <!-- Daily Summary -->
+    <div class="report-card">
+      <div class="card-header">
+        <span>Daily Sales Summary</span>
+        <i class="bi bi-calendar-check-fill"></i>
       </div>
-
-      <div class="col-md-3">
-        <label for="searchClient" class="form-label">Client Info (Contact/Account)</label>
-        <input type="text" id="searchClient" class="form-control" placeholder="Contact / Account No." readonly>
-      </div>
-
-      <div class="col-md-2 d-grid align-self-end">
-        <label class="form-label d-block mb-1">Tax Option</label>
-        <div class="d-flex justify-content-start">
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="gstOption" id="gstYes" value="yes" checked>
-            <label class="form-check-label" for="gstYes">With GST</label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="gstOption" id="gstNo" value="no">
-            <label class="form-check-label" for="gstNo">Without GST</label>
-          </div>
+      <div class="card-body">
+        <div class="filter-bar">
+          <input type="date" id="summaryFromDate" class="form-control" style="width:170px;">
+          <input type="date" id="summaryToDate" class="form-control" style="width:170px;">
+          <button class="btn btn-primary" onclick="loadDailySummary()">Load Data</button>
+          <button class="btn btn-success"
+            onclick="downloadTableToExcel('dailySummaryTable', 'Daily_Sales')">Excel</button>
+          <button class="btn btn-danger" onclick="downloadTableToPDF('dailySummaryTable', 'Daily_Sales')">PDF</button>
         </div>
-      </div>
-
-      <div class="col-md-4 d-grid align-self-end">
-        <button type="submit" class="btn btn-success"><i class="bi bi-receipt"></i> Generate Invoice</button>
-      </div>
-    </form>
-
-    <div class="row g-3 mb-4 p-3 border rounded shadow-sm bg-light">
-      <div class="col-md-4">
-        <label for="item" class="form-label">Item (Brand)</label>
-        <select id="item" class="form-select" required>
-          <option value="">Select Item</option>
-        </select>
-      </div>
-      <div class="col-md-1">
-        <label for="qty" class="form-label">Qty</label>
-        <input type="number" id="qty" class="form-control" placeholder="Qty" value="1" min="1" />
-      </div>
-      <div class="col-md-2">
-        <label for="rate" class="form-label">Rate (₹)</label>
-        <input type="number" id="rate" class="form-control" placeholder="Rate" value="0.00" min="0" />
-      </div>
-      <div class="col-md-2">
-        <label for="itemDisc" class="form-label">Discount (%)</label>
-        <input type="number" id="itemDisc" class="form-control" placeholder="Discount %" value="0" min="0" max="100" />
-      </div>
-
-      <div class="col-md-3 d-grid align-self-end">
-        <button type="button" class="btn btn-primary w-100" id="addItem">
-          <i class="bi bi-plus-circle"></i> Add Item
-        </button>
-      </div>
-    </div>
-
-    <div class="table-responsive mb-4">
-      <table class="table table-bordered table-striped table-sm">
-        <thead class="table-dark">
-          <tr>
-            <th>Item (Brand)</th>
-            <th>Unit</th>
-            <th>Qty</th>
-            <th>Rate (Excl. Disc)</th>
-            <th>Disc (%)</th>
-            <th>Net Value</th>
-            <th>GST %</th>
-            <th>GST Amt</th>
-            <th>Total Amount</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="invoiceTable">
-          <tr>
-            <td colspan="10" class="text-center text-muted">Add items above to start invoicing.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="row justify-content-end">
-      <div class="col-md-5">
-        <div class="summary-box">
-          <table class="table table-sm mb-0">
+        <div class="table-responsive">
+          <table id="dailySummaryTable" class="table table-hover">
+            <thead>
+              <tr>
+                <th>Invoice No</th>
+                <th>Client</th>
+                <th>Date</th>
+                <th>GST %</th>
+                <th>Total</th>
+                <th>Paid</th>
+                <th>Pending</th>
+                <th>Status</th>
+              </tr>
+            </thead>
             <tbody>
               <tr>
-                <td>**Subtotal (Taxable Value)**</td>
-                <td class="text-end fw-bold">₹<span id="subtotal">0.00</span></td>
-              </tr>
-              <tr>
-                <td>**Total GST (<span id="gstPercent">18</span>%)**</td>
-                <td class="text-end fw-bold">₹<span id="gstAmount">0.00</span></td>
-              </tr>
-              <tr class="table-info">
-                <td>**GRAND PAYABLE**</td>
-                <td class="text-end fw-bold">₹<span id="totalAmount">0.00</span></td>
+                <td colspan="8" class="text-center text-muted py-5">Click Load Data to see all invoices</td>
               </tr>
             </tbody>
           </table>
-          <h5 class="text-end mt-2" style="display:none;">Payable: ₹<span id="payableAmount">0.00</span></h5>
         </div>
       </div>
     </div>
 
-    <hr class="my-4" />
-
-    <div class="invoice-list-card">
-      <h5 class="mb-3"><i class="bi bi-list-check"></i> Recent Invoices</h5>
-      <div class="row mb-3">
-        <div class="col-md-4">
-          <label for="searchClientList" class="form-label">Filter by Client</label>
-          <select id="searchClientList" class="form-select" onchange="loadInvoices()">
-            <option value="">Select Client</option>
-            <option value="All">All</option>
-          </select>
-        </div>
+    <!-- Client-wise Report -->
+    <div class="report-card">
+      <div class="card-header">
+        <span>Client-wise Report</span>
+        <i class="bi bi-person-lines-fill"></i>
       </div>
-      <div class="table-responsive">
-        <table class="table table-bordered table-striped table-sm align-middle">
-          <thead class="table-dark">
-            <tr>
-              <th>Date</th>
-              <th>Client</th>
-              <th>Items Count</th>
-              <th>Payable</th>
-              <th>Status</th>
-              <th style="min-width: 300px;">Action</th>
-            </tr>
-          </thead>
-          <tbody id="invoiceList"></tbody>
-        </table>
+      <div class="card-body">
+        <div class="filter-bar position-relative">
+          <div class="position-relative" style="width:300px;">
+            <input type="text" id="clientSearchInput" class="form-control" placeholder="Search Client..."
+              autocomplete="off">
+            <div id="clientSearchResults" class="search-results"></div>
+          </div>
+          <input type="hidden" id="selectedClientName">
+          <input type="date" id="clientFromDate" class="form-control" style="width:160px;">
+          <input type="date" id="clientToDate" class="form-control" style="width:160px;">
+          <button class="btn btn-primary" onclick="loadClientReport()">Load</button>
+          <button class="btn btn-success"
+            onclick="downloadTableToExcel('clientReportTable', 'Client_Report')">Excel</button>
+          <button class="btn btn-danger" onclick="downloadTableToPDF('clientReportTable', 'Client_Report')">PDF</button>
+        </div>
+        <div class="table-responsive">
+          <table id="clientReportTable" class="table table-hover">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Date</th>
+                <th>GST %</th>
+                <th>Total</th>
+                <th>Paid</th>
+                <th>Pending</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="7" class="text-center text-muted py-5">Search and select a client</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="modal fade" id="payModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5>Record Payment</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <!-- Item-wise Sales -->
+    <div class="report-card">
+      <div class="card-header">
+        <span>Item-wise Sales + GST Report</span>
+        <i class="bi bi-box-seam-fill"></i>
+      </div>
+      <div class="card-body">
+        <div class="filter-bar">
+          <input type="date" id="itemFromDate" class="form-control" style="width:170px;">
+          <input type="date" id="itemToDate" class="form-control" style="width:170px;">
+          <button class="btn btn-primary" onclick="loadItemReport()">Load</button>
+          <button class="btn btn-success" onclick="downloadTableToExcel('itemReportTable', 'GST_Sales')">Excel</button>
+          <button class="btn btn-danger" onclick="downloadTableToPDF('itemReportTable', 'GST_Sales')">PDF</button>
         </div>
-        <div class="modal-body text-center">
-          <p><strong>Client:</strong> <span id="payModalClient"></span></p>
-          <p><strong>Invoice:</strong> <span id="payModalInv"></span></p>
-          <p><strong>Due:</strong> ₹<span id="payModalDue"></span></p>
-          <input id="payAmt" type="number" class="form-control mb-2" placeholder="Amount paid">
-          <input id="payMode" class="form-control mb-2" placeholder="Mode (UPI/Cash)">
-          <input id="payTxn" class="form-control mb-2" placeholder="Txn ID">
-          <input id="payRemarks" class="form-control" placeholder="Remarks">
+        <div class="table-responsive">
+          <table id="itemReportTable" class="table table-hover">
+            <thead>
+              <tr>
+                <th>Item (Brand)</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Net Sale</th>
+                <th>GST %</th>
+                <th>GST Amt</th>
+                <th>Total Sale</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="7" class="text-center text-muted py-5">Select date range and click Load</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-success" id="recordPayment">Record Payment</button>
+      </div>
+    </div>
+
+    <!-- Outstanding -->
+    <div class="report-card">
+      <div class="card-header">
+        <span>Outstanding Payments</span>
+        <i class="bi bi-exclamation-triangle-fill"></i>
+      </div>
+      <div class="card-body">
+        <div class="filter-bar">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="outFilter" id="filterPending" value="pending" checked>
+            <label class="form-check-label" for="filterPending">Pending Only</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="outFilter" id="filterAll" value="all">
+            <label class="form-check-label" for="filterAll">All</label>
+          </div>
+          <button class="btn btn-warning" onclick="loadOutstanding()">Load Outstanding</button>
+          <button class="btn btn-success"
+            onclick="downloadTableToExcel('outstandingTable', 'Outstanding')">Excel</button>
+          <button class="btn btn-danger" onclick="downloadTableToPDF('outstandingTable', 'Outstanding')">PDF</button>
+        </div>
+        <div class="table-responsive">
+          <table id="outstandingTable" class="table table-hover">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Client</th>
+                <th>Contact</th>
+                <th>Date</th>
+                <th>Payable</th>
+                <th>Paid</th>
+                <th>Pending</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="8" class="text-center text-muted py-5">Click Load Outstanding to see data</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANCELLED Invoices -->
+    <div class="report-card cancelled-table">
+      <div class="card-header" style="background: linear-gradient(135deg, var(--danger), #ef4444);">
+        <span>CANCELLED Invoices</span>
+        <i class="bi bi-x-circle-fill"></i>
+      </div>
+      <div class="card-body">
+        <div class="filter-bar">
+          <button class="btn btn-danger" onclick="loadCancelledReport()">Load All Cancelled</button>
+          <button class="btn btn-outline-danger"
+            onclick="downloadTableToExcel('cancelledTable', 'CANCELLED')">Excel</button>
+          <button class="btn btn-outline-danger"
+            onclick="downloadTableToPDF('cancelledTable', 'CANCELLED')">PDF</button>
+        </div>
+        <div class="table-responsive">
+          <table id="cancelledTable" class="table table-hover">
+            <thead>
+              <tr>
+                <th>Invoice No</th>
+                <th>Client</th>
+                <th>Contact</th>
+                <th>Date</th>
+                <th>Cancelled On</th>
+                <th>Total Amount</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="7" class="text-center text-muted py-5">Click Load to see cancelled invoices</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <script type="module">
-    import { app } from "../pages/firebase-config.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAcXa1P1vgi8rx00psbQnNOfcbv9CGhyCQ",
+      authDomain: "hardwaretest-6f55b.firebaseapp.com",
+      projectId: "hardwaretest-6f55b",
+      storageBucket: "hardwaretest-6f55b.appspot.com",
+      messagingSenderId: "1058965019249",
+      appId: "1:1058965019249:web:d12b1d52822a450e0f19d0"
+    };
 
-    const auth = getAuth(app);
-    onAuthStateChanged(auth, user => {
-      if (!user) {
-        if (window.parent && window.parent !== window) {
-          window.parent.location.href = "../login.html";
-        } else {
-          window.location.href = "../login.html";
-        }
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    let clientContactMap = {};
+    let allClients = [];
+
+    function toDDMMYYYY(dateStr) {
+      if (!dateStr) return '';
+      const [y, m, d] = dateStr.split('-');
+      return `${d}-${m}-${y}`;
+    }
+
+    function showLoading(title = "Loading...") {
+      Swal.fire({
+        title: title,
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+      });
+    }
+
+    async function loadClients() {
+      try {
+        const snap = await db.collection("clients").get();
+        allClients = [];
+        clientContactMap = {};
+        snap.forEach(doc => {
+          const d = doc.data();
+          clientContactMap[d.name] = d.contact || 'N/A';
+          allClients.push({
+            name: d.name,
+            contact: d.contact || '',
+            full: `${d.name} (${d.contact || 'No Contact'})`
+          });
+        });
+      } catch (err) { console.error(err); }
+    }
+
+    // Live Search
+    document.getElementById('clientSearchInput').addEventListener('input', function () {
+      const query = this.value.trim();
+      const resultsDiv = document.getElementById('clientSearchResults');
+      resultsDiv.innerHTML = '';
+      document.getElementById('selectedClientName').value = '';
+
+      if (!query) {
+        resultsDiv.style.display = 'none';
+        return;
+      }
+
+      const filtered = allClients.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        c.contact.includes(query.replace(/\D/g, ''))
+      ).slice(0, 8);
+
+      if (filtered.length === 0) {
+        resultsDiv.innerHTML = '<div class="p-3 text-muted small text-center">No client found</div>';
+        resultsDiv.style.display = 'block';
+        return;
+      }
+
+      filtered.forEach(client => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+        div.innerHTML = `<div class="search-result-name">${client.name}</div><div class="search-result-contact">${client.contact || 'No contact'}</div>`;
+        div.onclick = () => {
+          document.getElementById('clientSearchInput').value = client.name;
+          document.getElementById('selectedClientName').value = client.name;
+          resultsDiv.style.display = 'none';
+        };
+        resultsDiv.appendChild(div);
+      });
+      resultsDiv.style.display = 'block';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('clientSearchInput').parentElement.contains(e.target)) {
+        document.getElementById('clientSearchResults').style.display = 'none';
       }
     });
+
+    // FULLY INDEX-FREE + NO DEFAULT DATE + CLEAN TIMESTAMP
+    async function loadDailySummary() {
+      let from = toDDMMYYYY(document.getElementById('summaryFromDate').value);
+      let to = toDDMMYYYY(document.getElementById('summaryToDate').value);
+
+      showLoading("Loading All Sales...");
+      try {
+        const snap = await db.collection('invoices').get(); // NO WHERE = NO INDEX NEEDED
+
+        const tbody = document.querySelector('#dailySummaryTable tbody');
+        tbody.innerHTML = '';
+
+        let total = 0, paid = 0, pendingTotal = 0, count = 0;
+
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (d.cancelled) return;
+          if (from && d.date < from) return;
+          if (to && d.date > to) return;
+
+          const payable = d.payable || 0;
+          const paidAmt = d.paidAmount || 0;
+          const pending = payable - paidAmt;
+
+          total += payable;
+          paid += paidAmt;
+          pendingTotal += pending;
+          count++;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+          <td><strong>${d.invoiceNo}</strong></td>
+          <td>${d.client}</td>
+          <td>${d.date}</td>
+          <td>${d.gstRate || 18}%</td>
+          <td>Rs.${payable.toFixed(2)}</td>
+          <td>Rs.${paidAmt.toFixed(2)}</td>
+          <td>Rs.${pending.toFixed(2)}</td>
+          <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
+        `;
+          tbody.appendChild(tr);
+        });
+
+        if (count === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No invoices found</td></tr>';
+        } else {
+          tbody.insertAdjacentHTML('beforeend', `
+          <tr class="table-primary fw-bold fs-5">
+            <td colspan="4">GRAND TOTAL</td>
+            <td>Rs.${total.toFixed(2)}</td>
+            <td>Rs.${paid.toFixed(2)}</td>
+            <td>Rs.${pendingTotal.toFixed(2)}</td>
+            <td></td>
+          </tr>
+        `);
+        }
+        Swal.close();
+      } catch (err) {
+        Swal.fire("Error", err.message, "error");
+      }
+    }
+
+    async function loadClientReport() {
+      const clientName = document.getElementById('selectedClientName').value;
+      if (!clientName) return Swal.fire("Error", "Select a client!", "warning");
+
+      let from = toDDMMYYYY(document.getElementById('clientFromDate').value);
+      let to = toDDMMYYYY(document.getElementById('clientToDate').value);
+
+      showLoading(`Loading ${clientName}'s Report...`);
+      try {
+        const snap = await db.collection('invoices').get(); // NO WHERE = NO INDEX
+
+        const tbody = document.querySelector('#clientReportTable tbody');
+        tbody.innerHTML = '';
+
+        let total = 0, paid = 0, count = 0;
+
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (d.client !== clientName || d.cancelled) return;
+          if (from && d.date < from) return;
+          if (to && d.date > to) return;
+
+          const payable = d.payable || 0;
+          const paidAmt = d.paidAmount || 0;
+          total += payable;
+          paid += paidAmt;
+          count++;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+          <td>${d.invoiceNo}</td>
+          <td>${d.date}</td>
+          <td>${d.gstRate || 18}%</td>
+          <td>Rs.${payable.toFixed(2)}</td>
+          <td>Rs.${paidAmt.toFixed(2)}</td>
+          <td>Rs.${(payable - paidAmt).toFixed(2)}</td>
+          <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
+        `;
+          tbody.appendChild(tr);
+        });
+
+        if (count === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No data</td></tr>';
+        } else {
+          tbody.insertAdjacentHTML('beforeend', `
+          <tr class="table-success fw-bold">
+            <td colspan="3">GRAND TOTAL</td>
+            <td>Rs.${total.toFixed(2)}</td>
+            <td>Rs.${paid.toFixed(2)}</td>
+            <td>Rs.${(total - paid).toFixed(2)}</td>
+            <td></td>
+          </tr>
+        `);
+        }
+        Swal.close();
+      } catch (err) {
+        Swal.fire("Error", err.message, "error");
+      }
+    }
+
+    async function loadItemReport() {
+      let from = toDDMMYYYY(document.getElementById('itemFromDate').value);
+      let to = toDDMMYYYY(document.getElementById('itemToDate').value);
+
+      showLoading("Generating GST Report...");
+      try {
+        const snap = await db.collection('invoices').get();
+
+        const itemMap = {};
+        let grandNet = 0, grandGST = 0, grandTotal = 0;
+
+        snap.forEach(doc => {
+          const inv = doc.data();
+          if (inv.cancelled) return;
+          if (from && inv.date < from) return;
+          if (to && inv.date > to) return;
+
+          (inv.items || []).forEach(item => {
+            const gstRate = item.gstRate !== undefined ? item.gstRate : 18;
+            const qty = item.qty || 0;
+            const rate = item.rate || 0;
+            const discount = item.discount || 0;
+
+            const subtotal = qty * rate;
+            const net = subtotal * (1 - discount / 100);
+            const gstAmt = net * (gstRate / 100);
+            const total = net + gstAmt;
+
+            const key = `${item.name || 'Unknown'}|${item.brand || 'N/A'}|${gstRate}`;
+            if (!itemMap[key]) {
+              itemMap[key] = { name: item.name, brand: item.brand || 'N/A', unit: item.unit || 'pcs', gstRate, qty: 0, net: 0, gst: 0, total: 0 };
+            }
+            itemMap[key].qty += qty;
+            itemMap[key].net += net;
+            itemMap[key].gst += gstAmt;
+            itemMap[key].total += total;
+          });
+        });
+
+        const tbody = document.querySelector('#itemReportTable tbody');
+        tbody.innerHTML = '';
+
+        const sorted = Object.values(itemMap).sort((a, b) => b.total - a.total);
+        sorted.forEach(it => {
+          grandNet += it.net;
+          grandGST += it.gst;
+          grandTotal += it.total;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+          <td><strong>${it.name}</strong><br><small class="text-muted">${it.brand}</small></td>
+          <td>${it.qty}</td>
+          <td>${it.unit}</td>
+          <td>Rs.${it.net.toFixed(2)}</td>
+          <td><span class="badge bg-info">${it.gstRate}%</span></td>
+          <td>Rs.${it.gst.toFixed(2)}</td>
+          <td class="fw-bold">Rs.${it.total.toFixed(2)}</td>
+        `;
+          tbody.appendChild(tr);
+        });
+
+        if (sorted.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No sales</td></tr>';
+        } else {
+          tbody.insertAdjacentHTML('beforeend', `
+          <tr class="table-dark text-white fw-bold fs-5">
+            <td colspan="3">GRAND TOTAL</td>
+            <td>Rs.${grandNet.toFixed(2)}</td>
+            <td></td>
+            <td>Rs.${grandGST.toFixed(2)}</td>
+            <td>Rs.${grandTotal.toFixed(2)}</td>
+          </tr>
+        `);
+        }
+        Swal.close();
+      } catch (err) {
+        Swal.fire("Error", err.message, "error");
+      }
+    }
+
+    async function loadOutstanding() {
+      showLoading("Loading Outstanding...");
+      const filter = document.querySelector('input[name="outFilter"]:checked').value;
+
+      try {
+        const snap = await db.collection('invoices').get(); // NO WHERE = NO INDEX
+
+        const tbody = document.querySelector('#outstandingTable tbody');
+        tbody.innerHTML = '';
+
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (d.cancelled) return;
+
+          const contact = clientContactMap[d.client] || 'N/A';
+          const paid = d.paidAmount || 0;
+          const pending = (d.payable || 0) - paid;
+
+          if (filter === 'pending' && pending <= 0) return;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+          <td>${d.invoiceNo}</td>
+          <td>${d.client}</td>
+          <td>${contact}</td>
+          <td>${d.date}</td>
+          <td>Rs.${(d.payable || 0).toFixed(2)}</td>
+          <td>Rs.${paid.toFixed(2)}</td>
+          <td>Rs.${pending.toFixed(2)}</td>
+          <td><span class="badge bg-${pending <= 0 ? 'success' : 'danger'}">${pending <= 0 ? 'Cleared' : 'Pending'}</span></td>
+        `;
+          tbody.appendChild(tr);
+        });
+
+        if (tbody.children.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5">No outstanding</td></tr>';
+        }
+        Swal.close();
+      } catch (err) {
+        Swal.fire("Error", err.message, "error");
+      }
+    }
+
+    async function loadCancelledReport() {
+      showLoading("Loading Cancelled Invoices...");
+      try {
+        const snap = await db.collection('invoices').where('cancelled', '==', true).get();
+        const tbody = document.querySelector('#cancelledTable tbody');
+        tbody.innerHTML = '';
+
+        let count = 0;
+        snap.forEach(doc => {
+          const d = doc.data();
+          count++;
+
+          const cancelledDate = d.cancelledAt ?
+            (d.cancelledAt.toDate ? d.cancelledAt.toDate().toLocaleDateString('en-GB').split('/').join('-') : d.cancelledAt)
+            : d.date;
+
+          const tr = document.createElement('tr');
+          tr.className = 'table-danger';
+          tr.innerHTML = `
+          <td><strong>${d.invoiceNo}</strong></td>
+          <td>${d.client}</td>
+          <td>${clientContactMap[d.client] || 'N/A'}</td>
+          <td>${d.date}</td>
+          <td>${cancelledDate}</td>
+          <td>Rs.${(d.payable || 0).toFixed(2)}</td>
+          <td>${d.cancelReason || 'Not specified'}</td>
+        `;
+          tbody.appendChild(tr);
+        });
+
+        if (count === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No cancelled invoices</td></tr>';
+        }
+        Swal.close();
+      } catch (err) {
+        Swal.fire("Error", err.message, "error");
+      }
+    }
+
+    function downloadTableToExcel(tableId, filename) {
+      const table = document.getElementById(tableId);
+      if (!table || table.querySelectorAll('tbody tr').length === 0) {
+        return Swal.fire("No Data", "Table is empty!", "info");
+      }
+
+      // Clone table
+      const tableClone = table.cloneNode(true);
+
+      // FORCE GST % as TEXT (18% not 0.18)
+      tableClone.querySelectorAll('td, th').forEach(cell => {
+        const text = cell.innerText.trim();
+
+        // जर cell मध्ये % असेल तर ती TEXT बनव
+        if (text.includes('%') && !isNaN(text.replace('%', ''))) {
+          const num = parseFloat(text.replace('%', ''));
+          cell.innerText = num + '%'; // 18%
+          cell.setAttribute('data-t', 's'); // XLSX ला सांगतो की हे string आहे
+        }
+
+        // Currency ला पण clean कर (₹ remove for Excel)
+        if (text.includes('₹')) {
+          cell.innerText = text.replace('₹', '').trim();
+        }
+      });
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.table_to_sheet(tableClone);
+
+      // Force GST column as TEXT
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellAddress]) continue;
+
+          const cellText = ws[cellAddress].v;
+          if (typeof cellText === 'string' && cellText.includes('%')) {
+            ws[cellAddress].t = 's'; // string
+            ws[cellAddress].v = cellText;
+            ws[cellAddress].z = '0%'; // format as percentage
+          }
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, "Report");
+      XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+    function downloadTableToPDF(tableId, filename) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('l', 'mm', 'a4');
+      doc.setFontSize(20);
+      doc.text(`${filename} - KUBER HARDWARE`, 14, 20);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 14, 28);
+
+      doc.autoTable({
+        html: `#${tableId}`,
+        startY: 35,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold' }
+      });
+      doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    }
+
+    // NO DEFAULT DATE + AUTO LOAD CLIENTS
+    window.onload = () => {
+      loadClients();
+      // DEFAULT DATE REMOVED - USER WILL CLICK LOAD
+    };
   </script>
 </body>
 
