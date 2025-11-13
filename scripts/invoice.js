@@ -30,7 +30,7 @@ const payModalClient = document.getElementById('payModalClient');
 const payModalInv = document.getElementById('payModalInv');
 const payModalDue = document.getElementById('payModalDue');
 const payAmt = document.getElementById('payAmt');
-const recordPaymentBtn = document.getElementById("recordPayment"); // New reference for loader
+const recordPaymentBtn = document.getElementById("recordPayment");
 
 let invoiceItems = [];
 let globalGstRate = 0.18;
@@ -39,10 +39,30 @@ let clientMap = {};
 let invoiceCache = [];
 let currentInvoiceId = null;
 
-// DATE FORMAT: DD-MM-YYYY
-function formatDateToDDMMYYYY(dateString) {
-  if (!dateString) return '';
-  const date = new Date(dateString);
+// PERFECT DATE FORMATTER - Handles DD-MM-YYYY, YYYY-MM-DD, Timestamp
+function formatDateToDDMMYYYY(dateInput) {
+  if (!dateInput) return 'NaN-NaN-NaN';
+
+  let date;
+  if (typeof dateInput === 'string') {
+    const parts = dateInput.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD
+        date = new Date(parts[0], parts[1] - 1, parts[2]);
+      } else {
+        // DD-MM-YYYY
+        date = new Date(parts[2], parts[1] - 1, parts[0]);
+      }
+    }
+  } else if (dateInput.toDate) {
+    date = dateInput.toDate();
+  } else {
+    date = new Date(dateInput);
+  }
+
+  if (isNaN(date.getTime())) return 'NaN-NaN-NaN';
+
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
@@ -57,6 +77,14 @@ function getTodayDDMMYYYY() {
   return `${day}-${month}-${year}`;
 }
 
+function getTodayISO() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Fetch GST Rate
 async function fetchGSTRate() {
   const snap = await getDoc(settingsDoc);
@@ -66,10 +94,10 @@ async function fetchGSTRate() {
   }
 }
 
-// Calculate Line Item
-function calculateLineItemValue(qty, rate, discount, gstRate) {
+// GST FIX: applyGst parameter
+function calculateLineItemValue(qty, rate, discount, gstRate, applyGst = true) {
   const netValue = qty * rate * (1 - discount / 100);
-  const gstAmount = netValue * (gstRate / 100);
+  const gstAmount = applyGst ? netValue * (gstRate / 100) : 0;
   const totalValue = netValue + gstAmount;
   return {
     netValue: parseFloat(netValue.toFixed(2)),
@@ -84,7 +112,7 @@ function updateSummary() {
   const applyGst = document.querySelector('input[name="gstOption"]:checked').value === 'yes';
 
   invoiceItems.forEach(item => {
-    const line = calculateLineItemValue(item.qty, item.rate, item.discount, item.gstRate);
+    const line = calculateLineItemValue(item.qty, item.rate, item.discount, item.gstRate, applyGst);
     subtotal += line.netValue;
     if (applyGst) {
       totalGst += line.gstAmount;
@@ -97,7 +125,7 @@ function updateSummary() {
   gstAmountEl.textContent = totalGst.toFixed(2);
   totalAmountEl.textContent = total.toFixed(2);
   payableAmountEl.textContent = total.toFixed(2);
-  gstPercentEl.textContent = maxGstRate > 0 ? maxGstRate.toFixed(0) : (globalGstRate * 100).toFixed(0);
+  gstPercentEl.textContent = applyGst && maxGstRate > 0 ? maxGstRate.toFixed(0) : '0';
   gstPercentEl.parentElement.style.display = applyGst ? '' : 'none';
 }
 
@@ -110,8 +138,10 @@ function renderInvoiceTable() {
     return;
   }
 
+  const applyGst = document.querySelector('input[name="gstOption"]:checked').value === 'yes';
+
   invoiceItems.forEach((it, idx) => {
-    const line = calculateLineItemValue(it.qty, it.rate, it.discount, it.gstRate);
+    const line = calculateLineItemValue(it.qty, it.rate, it.discount, it.gstRate, applyGst);
     invoiceTable.innerHTML += `
       <tr>
         <td style="width:22%; font-size:0.9rem;">${it.name} (${it.brand || 'N/A'})</td>
@@ -120,7 +150,7 @@ function renderInvoiceTable() {
         <td style="width:10%;">Rs. ${it.rate.toFixed(2)}</td>
         <td style="width:8%;">${it.discount}%</td>
         <td style="width:10%;">Rs. ${line.netValue.toFixed(2)}</td>
-        <td style="width:8%;">${it.gstRate.toFixed(0)}%</td>
+        <td style="width:8%;">${applyGst ? it.gstRate.toFixed(0) : 0}%</td>
         <td style="width:10%;">Rs. ${line.gstAmount.toFixed(2)}</td>
         <td style="width:10%;">Rs. ${line.totalValue.toFixed(2)}</td>
         <td style="width:6%;"><button class="btn btn-sm btn-danger" onclick="removeItem(${idx})">X</button></td>
@@ -160,14 +190,11 @@ function onItemChange() {
 
 // Populate Clients & Items
 async function populateClientsAndItems() {
-  // Add loading state for client selects
   const loadingOption = '<option selected disabled>Loading clients...</option>';
   clientSelect.innerHTML = loadingOption;
   searchClientList.innerHTML = loadingOption;
 
   const clientSnap = await getDocs(clientCol);
-
-  // Clear loading state and add All option for searchClientList
   clientSelect.innerHTML = '';
   searchClientList.innerHTML = '<option value="All">All Clients</option>';
 
@@ -196,7 +223,7 @@ async function populateClientsAndItems() {
   });
 }
 
-// Load Invoices
+// Load Invoices - DATE 100% FIXED
 window.loadInvoices = async () => {
   const clientName = searchClientList.value;
   if (!clientName || clientName === 'All') {
@@ -212,8 +239,18 @@ window.loadInvoices = async () => {
   invoiceCache = [];
 
   const invoices = [];
-  snap.forEach(d => { const data = d.data(); data.id = d.id; invoices.push(data); });
-  invoices.sort((a, b) => b.date.localeCompare(a.date));
+  snap.forEach(d => {
+    const data = d.data();
+    data.id = d.id;
+    invoices.push(data);
+  });
+
+  // SORT BY ISO DATE (PERFECT ORDER)
+  invoices.sort((a, b) => {
+    const dateA = a.dateISO || a.date || '0000-00-00';
+    const dateB = b.dateISO || b.date || '0000-00-00';
+    return dateB.localeCompare(dateA);
+  });
 
   invoices.forEach(inv => {
     invoiceCache.push(inv);
@@ -226,7 +263,7 @@ window.loadInvoices = async () => {
 
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td>${formatDateToDDMMYYYY(inv.date)}</td>
+      <td>${formatDateToDDMMYYYY(inv.date || inv.dateISO)}</td>
       <td>${inv.client}</td>
       <td>${inv.items.length}</td>
       <td>Rs. ${Number(inv.payable).toFixed(2)}</td>
@@ -242,7 +279,7 @@ window.loadInvoices = async () => {
   });
 };
 
-// VIEW + PRINT + PDF WITH CANCELLED WATERMARK
+// VIEW + PRINT + PDF
 async function generateInvoiceWindow(invoiceId, autoPrint = false) {
   const inv = invoiceCache.find(i => i.id === invoiceId) || (await getDoc(doc(db, 'invoices', invoiceId))).data();
   if (!inv) return alert("Invoice not found!");
@@ -252,9 +289,13 @@ async function generateInvoiceWindow(invoiceId, autoPrint = false) {
   clientSnap.forEach(d => { if (d.data().name === inv.client) clientInfo = d.data(); });
 
   let totalSubtotal = 0, totalGst = 0;
+
+  // MAIN FIX: Invoice madhe withoutGST field asel tar GST 0
+  const applyGst = !inv.withoutGST;
+
   const rows = inv.items.map(it => {
     const gstRate = it.gstRate || 18;
-    const line = calculateLineItemValue(it.qty, it.rate, it.discount, gstRate);
+    const line = calculateLineItemValue(it.qty, it.rate, it.discount, gstRate, applyGst);
     totalSubtotal += line.netValue;
     totalGst += line.gstAmount;
     return `<tr>
@@ -264,7 +305,7 @@ async function generateInvoiceWindow(invoiceId, autoPrint = false) {
       <td style="font-size:9.5px;text-align:center;padding:1.5px;">Rs. ${it.rate.toFixed(2)}</td>
       <td style="font-size:9.5px;text-align:center;padding:1.5px;">${it.discount}%</td>
       <td style="font-size:9.5px;text-align:right;padding:1.5px;">Rs. ${line.netValue.toFixed(2)}</td>
-      <td style="font-size:9.5px;text-align:center;padding:1.5px;">${gstRate}%</td>
+      <td style="font-size:9.5px;text-align:center;padding:1.5px;">${applyGst ? gstRate : 0}%</td>
       <td style="font-size:9.5px;text-align:right;padding:1.5px;">Rs. ${line.gstAmount.toFixed(2)}</td>
       <td style="font-size:9.5px;text-align:right;padding:1.5px;">Rs. ${line.totalValue.toFixed(2)}</td>
     </tr>`;
@@ -272,16 +313,20 @@ async function generateInvoiceWindow(invoiceId, autoPrint = false) {
 
   const paid = inv.paidAmount || 0;
   const pending = inv.payable - paid;
-  const displayDate = formatDateToDDMMYYYY(inv.date);
+  const displayDate = formatDateToDDMMYYYY(inv.date || inv.dateISO);
 
-  // CANCELLED WATERMARK
+  // Optional: PDF var "WITHOUT GST" cha stamp
+  const withoutGSTOverlay = inv.withoutGST ? `
+    <div style="position:fixed;top:20mm;right:15mm;transform:rotate(-20deg);background:#ff9800;color:white;padding:5px 20px;font-weight:bold;font-size:18px;opacity:0.9;z-index:9999;">
+      WITHOUT GST
+    </div>` : '';
+
   const cancelledOverlay = inv.cancelled ? `
     <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);color:#ff0000;font-size:80px;opacity:0.25;font-weight:bold;z-index:9999;pointer-events:none;">
       CANCELLED
     </div>` : '';
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${inv.invoiceNo}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${inv.invoiceNo}</title>
 <style>
   @page { size: A4 portrait; margin: 0 !important; }
   html, body { margin:0 !important; padding:0 !important; height:100%; overflow:hidden; }
@@ -305,6 +350,7 @@ async function generateInvoiceWindow(invoiceId, autoPrint = false) {
 </style>
 </head>
 <body>
+${withoutGSTOverlay}
 ${cancelledOverlay}
 <div class="bill">
   <div class="header">
@@ -382,7 +428,7 @@ window.viewInvoice = (id) => generateInvoiceWindow(id, false);
 window.printInvoice = (id) => generateInvoiceWindow(id, true);
 window.downloadPDF = (id) => { viewInvoice(id); alert("Print to Save as PDF"); };
 
-// CANCEL INVOICE WITH REMARK
+// CANCEL INVOICE
 window.cancelInvoice = async (id) => {
   const reason = prompt("Cancel Reason (Required):", "Wrong entry / Customer cancelled");
   if (!reason || reason.trim() === "") return alert("Cancel reason is required!");
@@ -393,7 +439,6 @@ window.cancelInvoice = async (id) => {
   const snap = await getDoc(ref);
   const inv = snap.data();
 
-  // Restore stock
   for (const it of inv.items) {
     const stRef = doc(stockCol, it.id);
     const stSnap = await getDoc(stRef);
@@ -402,7 +447,6 @@ window.cancelInvoice = async (id) => {
     }
   }
 
-  // Update invoice with cancel reason
   await updateDoc(ref, {
     cancelled: true,
     cancelReason: reason.trim(),
@@ -413,7 +457,7 @@ window.cancelInvoice = async (id) => {
   await loadInvoices();
 };
 
-// Save Invoice (unchanged)
+// SAVE INVOICE - NOW SAVES dateISO
 async function saveInvoiceHandler(e) {
   e.preventDefault();
   if (!clientSelect.value || invoiceItems.length === 0) return alert('Required fields missing!');
@@ -430,12 +474,24 @@ async function saveInvoiceHandler(e) {
 
     const allSnap = await getDocs(invoiceCol);
     const invoiceNo = `INV-${String(allSnap.size + 1).padStart(5, '0')}`;
-    const todayDDMMYYYY = getTodayDDMMYYYY();
+    const todayDDMM = getTodayDDMMYYYY();
+    const todayISO = getTodayISO();
+
+    const applyGst = document.querySelector('input[name="gstOption"]:checked').value === 'yes';
 
     const data = {
-      invoiceNo, client: clientSelect.value, date: todayDDMMYYYY,
-      items: invoiceItems, subtotal, gst, total, payable: total, paidAmount: 0,
-      payments: [], cleared: false
+      invoiceNo,
+      client: clientSelect.value,
+      date: todayDDMM,
+      dateISO: todayISO,
+      dateTimestamp: new Date(),
+      items: invoiceItems,
+      subtotal, gst, total,
+      payable: total,
+      paidAmount: 0,
+      payments: [],
+      cleared: false,
+      withoutGST: !applyGst   // ← HI LINE ADD KELI (MAIN FIX)
     };
 
     const docRef = await addDoc(invoiceCol, data);
@@ -464,7 +520,7 @@ async function saveInvoiceHandler(e) {
   }
 }
 
-// Payment Modal + Client History (unchanged)
+// PAYMENT MODAL
 window.openPaymentModal = async (id) => {
   currentInvoiceId = id;
   const snap = await getDoc(doc(db, 'invoices', id));
@@ -481,7 +537,6 @@ document.getElementById("recordPayment").addEventListener("click", async () => {
   const amt = parseFloat(payAmt.value) || 0;
   if (amt <= 0) return alert("Enter valid amount!");
 
-  // Start Loading State
   recordPaymentBtn.disabled = true;
   recordPaymentBtn.textContent = 'Recording...';
 
@@ -532,13 +587,12 @@ document.getElementById("recordPayment").addEventListener("click", async () => {
     console.error("Payment recording failed:", error);
     alert("Error recording payment: " + error.message);
   } finally {
-    // End Loading State
     recordPaymentBtn.textContent = 'Record Payment';
     recordPaymentBtn.disabled = false;
   }
 });
 
-// INIT
+// INIT - FULL
 window.addEventListener('DOMContentLoaded', async () => {
   $('#item, #client, #searchClientList').select2({ width: '100%' });
   await fetchGSTRate();
