@@ -242,6 +242,7 @@
 
   <div class="container-fluid">
 
+    <!-- DAILY SUMMARY -->
     <div class="report-card">
       <div class="card-header">
         <span>Daily Sales Summary</span>
@@ -280,6 +281,7 @@
       </div>
     </div>
 
+    <!-- CLIENT REPORT -->
     <div class="report-card">
       <div class="card-header">
         <span>Client-wise Report</span>
@@ -323,6 +325,7 @@
       </div>
     </div>
 
+    <!-- ITEM-WISE GST REPORT -->
     <div class="report-card">
       <div class="card-header">
         <span>Item-wise Sales + GST Report</span>
@@ -359,6 +362,7 @@
       </div>
     </div>
 
+    <!-- OUTSTANDING -->
     <div class="report-card">
       <div class="card-header">
         <span>Outstanding Payments</span>
@@ -403,6 +407,7 @@
       </div>
     </div>
 
+    <!-- CANCELLED -->
     <div class="report-card cancelled-table">
       <div class="card-header" style="background: linear-gradient(135deg, var(--danger), #ef4444);">
         <span>CANCELLED Invoices</span>
@@ -472,12 +477,9 @@
       });
     }
 
-    // Helper function for aggressive normalization
     function normalizeString(str) {
       if (!str) return '';
-      // FIX: सर्व Whitespace आणि Non-Alphanumeric characters काढून टाकणे
-      let cleaned = str.replace(/[^a-zA-Z0-9]/g, '');
-      return cleaned.toLowerCase();
+      return str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     }
 
     async function loadClients() {
@@ -495,7 +497,6 @@
             clientContactMap[name] = contact || 'N/A';
             allClients.push({
               name: name,
-              // नावातून सर्व स्पेसेस आणि विशिष्ट चिन्हे काढून lowercase मध्ये सेव्ह करणे
               nameNormalized: normalizeString(name),
               contact: contact
             });
@@ -516,7 +517,6 @@
 
       input.addEventListener('input', function () {
         const query = this.value.trim();
-        //console.log(`\n[DEBUG] User typed: "${query}"`);
         resultsDiv.innerHTML = '';
         document.getElementById('selectedClientName').value = '';
 
@@ -526,17 +526,11 @@
         }
 
         const queryNormalized = normalizeString(query);
-        const mobileQuery = query.replace(/\D/g, '');  // फक्त नंबर
-
-        //console.log(`[DEBUG] Query Normalized: "${queryNormalized}" | Mobile Query: "${mobileQuery}" (length: ${mobileQuery.length})`);
+        const mobileQuery = query.replace(/\D/g, '');
 
         const filtered = allClients.filter(c => {
           const nameMatch = c.nameNormalized.includes(queryNormalized);
-
-          // FIX: फक्त 3+ नंबर असतील तरच mobile search कर
           const contactMatch = mobileQuery.length >= 3 && c.contact.includes(mobileQuery);
-
-          //console.log(`[DEBUG] Checking "${c.name}" → nameMatch: ${nameMatch}, contactMatch: ${contactMatch}`);
           return nameMatch || contactMatch;
         }).slice(0, 10);
 
@@ -549,7 +543,6 @@
         filtered.forEach(client => {
           const div = document.createElement('div');
           div.className = 'search-result-item';
-          // येथे मूळ (Original) नाव वापरले जात आहे.
           div.innerHTML = `<div class="search-result-name">${client.name}</div><div class="search-result-contact">${client.contact || 'No contact'}</div>`;
           div.onclick = () => {
             input.value = client.name;
@@ -573,6 +566,13 @@
       });
     }
 
+    // FIXED: Actual GST % from invoice (withoutGST = 0%)
+    function getInvoiceGSTDisplay(inv) {
+      if (inv.withoutGST) return { rate: 0, badge: 'bg-secondary' };
+      const rate = inv.items?.[0]?.gstRate || 18;
+      return { rate, badge: 'bg-info' };
+    }
+
     async function loadDailySummary() {
       let from = toDDMMYYYY(document.getElementById('summaryFromDate').value);
       let to = toDDMMYYYY(document.getElementById('summaryToDate').value);
@@ -591,6 +591,7 @@
           if (from && d.date < from) return;
           if (to && d.date > to) return;
 
+          const gstInfo = getInvoiceGSTDisplay(d);
           const payable = d.payable || 0;
           const paidAmt = d.paidAmount || 0;
           const pending = payable - paidAmt;
@@ -602,15 +603,15 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-                        <td><strong>${d.invoiceNo}</strong></td>
-                        <td>${d.client}</td>
-                        <td>${d.date}</td>
-                        <td>${d.gstRate || 18}%</td>
-                        <td>Rs.${payable.toFixed(2)}</td>
-                        <td>Rs.${paidAmt.toFixed(2)}</td>
-                        <td>Rs.${pending.toFixed(2)}</td>
-                        <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
-                    `;
+            <td><strong>${d.invoiceNo}</strong></td>
+            <td>${d.client}</td>
+            <td>${d.date}</td>
+            <td><span class="badge ${gstInfo.badge}">${gstInfo.rate}%</span></td>
+            <td>Rs.${payable.toFixed(2)}</td>
+            <td>Rs.${paidAmt.toFixed(2)}</td>
+            <td>Rs.${pending.toFixed(2)}</td>
+            <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
+          `;
           tbody.appendChild(tr);
         });
 
@@ -618,14 +619,14 @@
           tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No invoices found</td></tr>';
         } else {
           tbody.insertAdjacentHTML('beforeend', `
-                        <tr class="table-primary fw-bold fs-5">
-                            <td colspan="4">GRAND TOTAL</td>
-                            <td>Rs.${total.toFixed(2)}</td>
-                            <td>Rs.${paid.toFixed(2)}</td>
-                            <td>Rs.${pendingTotal.toFixed(2)}</td>
-                            <td></td>
-                        </tr>
-                    `);
+            <tr class="table-primary fw-bold fs-5">
+              <td colspan="4">GRAND TOTAL</td>
+              <td>Rs.${total.toFixed(2)}</td>
+              <td>Rs.${paid.toFixed(2)}</td>
+              <td>Rs.${pendingTotal.toFixed(2)}</td>
+              <td></td>
+            </tr>
+          `);
         }
         Swal.close();
       } catch (err) {
@@ -654,6 +655,7 @@
           if (from && d.date < from) return;
           if (to && d.date > to) return;
 
+          const gstInfo = getInvoiceGSTDisplay(d);
           const payable = d.payable || 0;
           const paidAmt = d.paidAmount || 0;
           total += payable;
@@ -662,14 +664,14 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-                        <td>${d.invoiceNo}</td>
-                        <td>${d.date}</td>
-                        <td>${d.gstRate || 18}%</td>
-                        <td>Rs.${payable.toFixed(2)}</td>
-                        <td>Rs.${paidAmt.toFixed(2)}</td>
-                        <td>Rs.${(payable - paidAmt).toFixed(2)}</td>
-                        <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
-                    `;
+            <td>${d.invoiceNo}</td>
+            <td>${d.date}</td>
+            <td><span class="badge ${gstInfo.badge}">${gstInfo.rate}%</span></td>
+            <td>Rs.${payable.toFixed(2)}</td>
+            <td>Rs.${paidAmt.toFixed(2)}</td>
+            <td>Rs.${(payable - paidAmt).toFixed(2)}</td>
+            <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
+          `;
           tbody.appendChild(tr);
         });
 
@@ -677,14 +679,14 @@
           tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No data</td></tr>';
         } else {
           tbody.insertAdjacentHTML('beforeend', `
-                        <tr class="table-success fw-bold">
-                            <td colspan="3">GRAND TOTAL</td>
-                            <td>Rs.${total.toFixed(2)}</td>
-                            <td>Rs.${paid.toFixed(2)}</td>
-                            <td>Rs.${(total - paid).toFixed(2)}</td>
-                            <td></td>
-                        </tr>
-                    `);
+            <tr class="table-success fw-bold">
+              <td colspan="3">GRAND TOTAL</td>
+              <td>Rs.${total.toFixed(2)}</td>
+              <td>Rs.${paid.toFixed(2)}</td>
+              <td>Rs.${(total - paid).toFixed(2)}</td>
+              <td></td>
+            </tr>
+          `);
         }
         Swal.close();
       } catch (err) {
@@ -704,12 +706,12 @@
 
         snap.forEach(doc => {
           const inv = doc.data();
-          if (inv.cancelled) return;
+          if (inv.cancelled || inv.withoutGST) return;  // WITHOUT GST SKIP
           if (from && inv.date < from) return;
           if (to && inv.date > to) return;
 
           (inv.items || []).forEach(item => {
-            const gstRate = item.gstRate !== undefined ? item.gstRate : 18;
+            const gstRate = item.gstRate || 18;
             const qty = item.qty || 0;
             const rate = item.rate || 0;
             const discount = item.discount || 0;
@@ -741,29 +743,49 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-                        <td><strong>${it.name}</strong><br><small class="text-muted">${it.brand}</small></td>
-                        <td>${it.qty}</td>
-                        <td>${it.unit}</td>
-                        <td>Rs.${it.net.toFixed(2)}</td>
-                        <td><span class="badge bg-info">${it.gstRate}%</span></td>
-                        <td>Rs.${it.gst.toFixed(2)}</td>
-                        <td class="fw-bold">Rs.${it.total.toFixed(2)}</td>
-                    `;
+            <td><strong>${it.name}</strong><br><small class="text-muted">${it.brand}</small></td>
+            <td>${it.qty}</td>
+            <td>${it.unit}</td>
+            <td>Rs.${it.net.toFixed(2)}</td>
+            <td><span class="badge bg-info">${it.gstRate}%</span></td>
+            <td>Rs.${it.gst.toFixed(2)}</td>
+            <td class="fw-bold">Rs.${it.total.toFixed(2)}</td>
+          `;
           tbody.appendChild(tr);
         });
 
-        if (sorted.length === 0) {
+        // Add WITHOUT GST row if any
+        let withoutGSTTotal = 0;
+        snap.forEach(doc => {
+          const inv = doc.data();
+          if (inv.cancelled || !inv.withoutGST) return;
+          if (from && inv.date < from) return;
+          if (to && inv.date > to) return;
+          withoutGSTTotal += inv.payable || 0;
+        });
+
+        if (withoutGSTTotal > 0) {
+          tbody.insertAdjacentHTML('beforeend', `
+            <tr class="table-warning">
+              <td colspan="6"><strong>WITHOUT GST SALES</strong></td>
+              <td class="fw-bold">Rs.${withoutGSTTotal.toFixed(2)}</td>
+            </tr>
+          `);
+          grandTotal += withoutGSTTotal;
+        }
+
+        if (sorted.length === 0 && withoutGSTTotal === 0) {
           tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No sales</td></tr>';
         } else {
           tbody.insertAdjacentHTML('beforeend', `
-                        <tr class="table-dark text-white fw-bold fs-5">
-                            <td colspan="3">GRAND TOTAL</td>
-                            <td>Rs.${grandNet.toFixed(2)}</td>
-                            <td></td>
-                            <td>Rs.${grandGST.toFixed(2)}</td>
-                            <td>Rs.${grandTotal.toFixed(2)}</td>
-                        </tr>
-                    `);
+            <tr class="table-dark text-white fw-bold fs-5">
+              <td colspan="3">GRAND TOTAL</td>
+              <td>Rs.${grandNet.toFixed(2)}</td>
+              <td></td>
+              <td>Rs.${grandGST.toFixed(2)}</td>
+              <td>Rs.${grandTotal.toFixed(2)}</td>
+            </tr>
+          `);
         }
         Swal.close();
       } catch (err) {
@@ -792,15 +814,15 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-                        <td>${d.invoiceNo}</td>
-                        <td>${d.client}</td>
-                        <td>${contact}</td>
-                        <td>${d.date}</td>
-                        <td>Rs.${(d.payable || 0).toFixed(2)}</td>
-                        <td>Rs.${paid.toFixed(2)}</td>
-                        <td>Rs.${pending.toFixed(2)}</td>
-                        <td><span class="badge bg-${pending <= 0 ? 'success' : 'danger'}">${pending <= 0 ? 'Cleared' : 'Pending'}</span></td>
-                    `;
+            <td>${d.invoiceNo}</td>
+            <td>${d.client}</td>
+            <td>${contact}</td>
+            <td>${d.date}</td>
+            <td>Rs.${(d.payable || 0).toFixed(2)}</td>
+            <td>Rs.${paid.toFixed(2)}</td>
+            <td>Rs.${pending.toFixed(2)}</td>
+            <td><span class="badge bg-${pending <= 0 ? 'success' : 'danger'}">${pending <= 0 ? 'Cleared' : 'Pending'}</span></td>
+          `;
           tbody.appendChild(tr);
         });
 
@@ -832,14 +854,14 @@
           const tr = document.createElement('tr');
           tr.className = 'table-danger';
           tr.innerHTML = `
-                        <td><strong>${d.invoiceNo}</strong></td>
-                        <td>${d.client}</td>
-                        <td>${clientContactMap[d.client] || 'N/A'}</td>
-                        <td>${d.date}</td>
-                        <td>${cancelledDate}</td>
-                        <td>Rs.${(d.payable || 0).toFixed(2)}</td>
-                        <td>${d.cancelReason || 'Not specified'}</td>
-                    `;
+            <td><strong>${d.invoiceNo}</strong></td>
+            <td>${d.client}</td>
+            <td>${clientContactMap[d.client] || 'N/A'}</td>
+            <td>${d.date}</td>
+            <td>${cancelledDate}</td>
+            <td>Rs.${(d.payable || 0).toFixed(2)}</td>
+            <td>${d.cancelReason || 'Not specified'}</td>
+          `;
           tbody.appendChild(tr);
         });
 
@@ -864,25 +886,10 @@
         if (text.includes('Rs.')) {
           cell.innerText = text.replace('Rs.', '').trim();
         }
-        if (cell.querySelector('.badge.bg-info')) {
-          cell.innerText = cell.innerText;
-        }
       });
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.table_to_sheet(tableClone);
-
-      const range = XLSX.utils.decode_range(ws['!ref']);
-      for (let R = range.s.r; R <= range.e.r; ++R) {
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-          const cell = ws[cellAddress];
-          if (cell && typeof cell.v === 'string' && cell.v.includes('%')) {
-            cell.t = 's';
-          }
-        }
-      }
-
       XLSX.utils.book_append_sheet(wb, ws, "Report");
       XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
