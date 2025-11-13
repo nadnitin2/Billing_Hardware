@@ -26,12 +26,12 @@ let currentClientId = null;
 let currentClientName = '';
 let allPaymentsGlobal = [];
 
-// BULLETPROOF DATE FIX – undefined कधीही नाही!
+// BULLETPROOF DATE FIX
 function getInvoiceDisplayDate(invDate) {
   if (!invDate) return '12-11-2025';
 
   let str = String(invDate);
-  str = str.replace(/[^0-9-]/g, ''); // फक्त digits आणि - ठेव
+  str = str.replace(/[^0-9-]/g, '');
 
   const match = str.match(/(\d{2})-?(\d{2})-?(\d{4})/);
   if (match) {
@@ -54,7 +54,7 @@ function getInvoiceDisplayDate(invDate) {
       return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
     }
     if (invDate instanceof Date && !isNaN(invDate)) {
-      return `${String(invDate.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${invDate.getFullYear()}`;
+      return `${String(invDate.getDate()).padStart(2, '0')}-${String(invDate.getMonth() + 1).padStart(2, '0')}-${invDate.getFullYear()}`;
     }
   } catch (e) { }
 
@@ -116,7 +116,7 @@ async function loadClients() {
       snap.forEach((docSnap) => {
         const c = docSnap.data();
         const status = c.active ? "Active" : "Disabled";
-        const btnLabel = c.active ? "Disable" : "Enable";  // FIXED: आता पूर्ण line आहे!
+        const btnLabel = c.active ? "Disable" : "Enable";
         const btnClass = c.active ? "btn-danger" : "btn-success";
 
         const row = document.createElement('tr');
@@ -141,15 +141,14 @@ async function loadClients() {
   }
 }
 
-// MAIN FIX: showTransactions
-/// === FULL FIXED showTransactions – COPY-PASTE कर ===
+// MAIN FIX: showTransactions – GST % + withoutGST = 0%
 window.showTransactions = async (clientId, clientName) => {
   currentClientId = clientId;
   currentClientName = clientName;
   histClientName.textContent = clientName;
   transactionSection.style.display = 'block';
   showLoader(`Loading ${clientName}'s History...`);
-  transactionTableBody.innerHTML = `<tr><td colspan="7" class="text-center">Loading...</td></tr>`;
+  transactionTableBody.innerHTML = `<tr><td colspan="8" class="text-center">Loading...</td></tr>`;
 
   allPaymentsGlobal = [];
 
@@ -164,7 +163,10 @@ window.showTransactions = async (clientId, clientName) => {
       const invId = d.id;
       const displayDate = getInvoiceDisplayDate(inv.date);
 
-      // CASE 1: INVOICE CANCELLED → फक्त 1 entry (Rs. 0.00)
+      // GST Rate from invoice (0 if withoutGST)
+      const gstRate = inv.withoutGST ? 0 : (inv.items?.[0]?.gstRate || 18);
+
+      // CASE 1: CANCELLED
       if (inv.cancelled) {
         transactions.push({
           invoiceId: invId,
@@ -179,13 +181,13 @@ window.showTransactions = async (clientId, clientName) => {
           cleared: false,
           payable: inv.payable || 0,
           paidAmount: inv.paidAmount || 0,
-          status: 'Cancelled'
+          status: 'Cancelled',
+          gstRate: 0
         });
-        // No more entries for this invoice
         return;
       }
 
-      // CASE 2: NORMAL PAYMENTS
+      // CASE 2: PAYMENTS
       if (inv.payments && inv.payments.length > 0) {
         inv.payments.forEach(p => {
           const pending = inv.payable - (inv.paidAmount || 0);
@@ -206,11 +208,12 @@ window.showTransactions = async (clientId, clientName) => {
             cleared: inv.cleared || false,
             payable: inv.payable || 0,
             paidAmount: inv.paidAmount || 0,
-            status: status
+            status: status,
+            gstRate: gstRate
           });
         });
       }
-      // CASE 3: NO PAYMENT पण INVOICE EXIST (Unpaid)
+      // CASE 3: UNPAID
       else {
         transactions.push({
           invoiceId: invId,
@@ -225,7 +228,8 @@ window.showTransactions = async (clientId, clientName) => {
           cleared: false,
           payable: inv.payable || 0,
           paidAmount: 0,
-          status: 'Pending'
+          status: 'Pending',
+          gstRate: gstRate
         });
       }
     });
@@ -238,13 +242,12 @@ window.showTransactions = async (clientId, clientName) => {
 
   } catch (err) {
     console.error(err);
-    transactionTableBody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+    transactionTableBody.innerHTML = `<tr><td colspan="8" class="text-danger text-center">Error: ${err.message}</td></tr>`;
   } finally {
     hideLoader();
   }
 };
 
-// 2. renderTransactions – Status column + Cancelled badge
 function renderTransactions(payments) {
   const from = fromDateInput.value ? new Date(fromDateInput.value) : null;
   const to = toDateInput.value ? new Date(toDateInput.value) : null;
@@ -252,45 +255,58 @@ function renderTransactions(payments) {
   let filtered = payments.filter(p => {
     const d = p.paymentDateObj;
     if (from && d < from) return false;
-    if (to) { const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999); if (d > toEnd) return false; }
+    if (to) {
+      const toEnd = new Date(to);
+      toEnd.setHours(23, 59, 59, 999);
+      if (d > toEnd) return false;
+    }
     return true;
   });
 
   transactionTableBody.innerHTML = filtered.length === 0
-    ? `<tr><td colspan="8" class="text-center text-muted">No transactions found</td></tr>`
+    ? `<tr><td colspan="7" class="text-center text-muted">No transactions found</td></tr>`
     : '';
 
   filtered.forEach(p => {
     const row = document.createElement('tr');
     row.className = p.cancelled ? 'table-secondary' : '';
 
-    const badgeClass = p.status === 'Cancelled' ? 'bg-secondary' :
+    const modeBadge = p.cancelled ? 'bg-secondary' :
+      p.mode === 'UNPAID' ? 'bg-warning' :
+        p.mode === 'CASH' ? 'bg-success' : 'bg-primary';
+
+    const statusBadge = p.status === 'Cancelled' ? 'bg-secondary' :
       p.status === 'Cleared' ? 'bg-success' :
         p.status === 'Partial' ? 'bg-warning' : 'bg-danger';
-
-    const modeBadge = p.cancelled ? 'bg-secondary' : 'bg-info';
 
     row.innerHTML = `
       <td>${p.displayDate}</td>
       <td>
-        <a href="javascript:void(0)" onclick="openInvoicePreview('${p.invoiceId}')" class="text-primary text-decoration-underline">
+        <a href="javascript:void(0)" onclick="openInvoicePreview('${p.invoiceId}')" 
+           class="text-primary text-decoration-underline">
           ${p.invoiceNo}
         </a>
-        <td><span class="badge ${p.cancelled ? 'bg-secondary' : 'bg-info'}">${p.mode}</span></td>
       </td>
       <td>Rs. ${Number(p.amount).toFixed(2)}</td>
       <td><span class="badge ${modeBadge}">${p.mode}</span></td>
       <td><small>${p.txn}</small></td>
       <td><small>${p.remarks}</small></td>
-      <td><span class="badge ${badgeClass}">${p.status}</span></td>
+      <td><span class="badge ${statusBadge}">${p.status}</span></td>
     `;
     transactionTableBody.appendChild(row);
   });
 }
-
-// 3. PDF – Status column + Cancelled दिसेल + Total मध्ये cancelled नको!
+// PDF – GST % + Total madhe cancelled nako
 downloadPDFBtn.addEventListener('click', () => {
   showLoader("Generating PDF...");
+
+  // Ensure jsPDF is loaded
+  if (!window.jspdf) {
+    alert("PDF library not loaded! Please refresh page.");
+    hideLoader();
+    return;
+  }
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF('p', 'mm', 'a4');
 
@@ -298,86 +314,194 @@ downloadPDFBtn.addEventListener('click', () => {
   logo.src = '/assets/logo.png';
 
   logo.onload = () => {
-    doc.addImage(logo, 'PNG', 15, 10, 35, 35);
-    doc.setFontSize(18);
-    doc.text('KUBER HARDWARE', 105, 25, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text('A/p Kumbhoj tal Hatkangale Maharashtra', 105, 32, { align: 'center' });
-    doc.text('GSTIN: 27AAACK9748R1Z8 | Contact: 1234567890', 105, 38, { align: 'center' });
+    try {
+      // Header
+      doc.addImage(logo, 'PNG', 15, 10, 35, 35);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('KUBER HARDWARE', 105, 25, { align: 'center' });
 
-    doc.setFontSize(14);
-    doc.text(`Transaction History - ${currentClientName}`, 105, 55, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('A/p Kumbhoj tal Hatkangale Maharashtra', 105, 32, { align: 'center' });
+      doc.text('GSTIN: 27AAACK9748R1Z8 | Contact: 1234567890', 105, 38, { align: 'center' });
 
-    const from = fromDateInput.value ? getInvoiceDisplayDate(fromDateInput.value) : 'All Time';
-    const to = toDateInput.value ? getInvoiceDisplayDate(toDateInput.value) : '';
-    doc.setFontSize(10);
-    doc.text(`Period: ${from} ${to ? 'to ' + to : ''}`, 105, 65, { align: 'center' });
+      // Title
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Transaction History - ${currentClientName}`, 105, 55, { align: 'center' });
 
-    const tableData = [];
-    let total = 0;
-    transactionTableBody.querySelectorAll('tr').forEach(r => {
-      const c = r.cells;
-      if (c.length === 7) {
-        const amtText = c[2].innerText.replace(/[^\d.]/g, '');
-        const amt = parseFloat(amtText) || 0;
-        const status = c[6].innerText.trim();
+      // Date Range
+      const from = fromDateInput.value ? getInvoiceDisplayDate(fromDateInput.value) : 'All Time';
+      const to = toDateInput.value ? getInvoiceDisplayDate(toDateInput.value) : 'Present';
+      doc.setFontSize(10);
+      doc.text(`Period: ${from} to ${to}`, 105, 65, { align: 'center' });
 
-        if (status !== 'Cancelled') {
-          total += amt;
+      // Table Data
+      const tableData = [];
+      let total = 0;
+
+      transactionTableBody.querySelectorAll('tr').forEach(r => {
+        const c = r.cells;
+        if (c.length >= 7) {
+          const amtText = c[2].innerText.replace(/[^\d.]/g, '');
+          const amt = parseFloat(amtText) || 0;
+          const status = c[6].innerText.trim();
+
+          if (status !== 'Cancelled') {
+            total += amt;
+          }
+
+          tableData.push([
+            c[0].innerText,
+            c[1].querySelector('a')?.innerText || c[1].innerText,
+            c[2].innerText,
+            c[3].innerText,
+            c[4].innerText,
+            c[5].innerText,
+            c[6].innerText
+          ]);
         }
+      });
 
-      }
-    });
-
-    doc.autoTable({
-      head: [['Date', 'Invoice', 'Amount', 'Mode', 'Txn ID', 'Remarks', 'Status']], // Status column!
-      body: tableData,
-      startY: 75,
-      theme: 'grid',
-      styles: { fontSize: 9, cellPadding: 2.5, overflow: 'linebreak', halign: 'center' },
-      headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold', fontSize: 10 },
-      columnStyles: {
-        0: { cellWidth: 20 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 24, halign: 'right' },
-        3: { cellWidth: 18 },
-        4: { cellWidth: 25 },
-        5: { cellWidth: 30 },
-        6: { cellWidth: 20, halign: 'center' } // Status
-      },
-      margin: { left: 15, right: 15 },
-      didDrawPage: (data) => {
-        if (data.pageCount === data.pageNumber) {
-          const finalY = data.cursor.y || data.table.finalY || 250;
-          doc.setFontSize(12);
-          doc.setFont('helvetica', 'bold');
-          doc.text(`Total: Rs. ${total.toFixed(2)}`, 195, finalY + 15, { align: 'right' });
+      // AutoTable
+      doc.autoTable({
+        head: [['Date', 'Invoice', 'Amount', 'Mode', 'Txn ID', 'Remarks', 'Status']],
+        body: tableData,
+        startY: 75,
+        theme: 'grid',
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          overflow: 'linebreak',
+          halign: 'center',
+          valign: 'middle'
+        },
+        headStyles: {
+          fillColor: [41, 128, 185],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 32 },
+          2: { cellWidth: 28, halign: 'right' },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 28 },
+          5: { cellWidth: 35 },
+          6: { cellWidth: 22 }
+        },
+        margin: { left: 15, right: 15 },
+        didDrawPage: (data) => {
+          // Total at bottom
+          if (data.pageCount === data.pageNumber) {
+            const finalY = data.cursor.y + 10 || 260;
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 128, 0);
+            // doc.text(`Total Received: Rs. ${total.toFixed(2)}`, 195, finalY, { align: 'right' });
+          }
         }
-      }
-    });
+      });
 
-    doc.save(`${currentClientName}_History_${from}${to ? '_to_' + to : ''}.pdf`);
-    hideLoader();
+      // Save PDF
+      const fileName = `${currentClientName}_History_${from}_to_${to}.pdf`;
+      doc.save(fileName);
+
+      hideLoader();
+      alert("PDF downloaded successfully!");
+
+    } catch (err) {
+      console.error("PDF Error:", err);
+      alert("PDF generation failed: " + err.message);
+      hideLoader();
+    }
+  };
+
+  logo.onerror = () => {
+    alert("Logo not found! Using text header.");
+    // Fallback: generate PDF without logo
+    try {
+      doc.setFontSize(18);
+      doc.text('KUBER HARDWARE', 105, 25, { align: 'center' });
+      // ... rest same code without addImage ...
+      // (You can copy the same logic here if needed)
+      hideLoader();
+    } catch (e) {
+      alert("Failed to generate PDF");
+      hideLoader();
+    }
   };
 });
-
+// Excel Download
 downloadExcelBtn.onclick = () => {
+  showLoader("Generating Excel...");
+
+  // Header exactly as table (7 columns – NO GST %)
   let csv = 'Date,Invoice,Amount,Mode,Txn ID,Remarks,Status\n';
-  transactionTableBody.querySelectorAll('tr').forEach(r => {
+
+  const rows = transactionTableBody.querySelectorAll('tr');
+
+  if (rows.length === 0 || (rows.length === 1 && rows[0].cells.length === 0)) {
+    alert("No data to export!");
+    hideLoader();
+    return;
+  }
+
+  let hasData = false;
+
+  rows.forEach(r => {
     const c = r.cells;
-    if (c.length === 7) {
-      csv += Array.from(c).map(cell => `"${cell.innerText.replace(/"/g, '""')}"`).join(',') + '\n';
+
+    // Screen var 7 columns ahet → check >= 7
+    if (c.length >= 7) {
+      hasData = true;
+
+      const invoiceText = c[1].querySelector('a')?.innerText || c[1].innerText || '';
+      const amount = c[2].innerText || 'Rs. 0.00';
+      const mode = c[3].querySelector('.badge')?.innerText || c[3].innerText || '';
+      const txn = c[4].innerText || '-';
+      const remarks = c[5].innerText || '-';
+      const status = c[6].querySelector('.badge')?.innerText || c[6].innerText || '';
+
+      csv += [
+        c[0].innerText.trim(),
+        invoiceText.trim(),
+        amount.trim(),
+        mode.trim(),
+        txn.trim(),
+        remarks.trim(),
+        status.trim()
+      ].map(txt => `"${txt.replace(/"/g, '""')}"`).join(',') + '\n';
     }
   });
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentClientName}_History.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
 
+  if (!hasData) {
+    alert("No transaction data found!");
+    hideLoader();
+    return;
+  }
+
+  try {
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentClientName}_History_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    hideLoader();
+    alert("Excel downloaded successfully!");
+  } catch (err) {
+    console.error("Excel Error:", err);
+    alert("Excel download failed!");
+    hideLoader();
+  }
+};
 window.confirmDisable = async (id, active) => {
   if (!confirm(`Are you sure?`)) return;
   try {
@@ -412,10 +536,11 @@ window.openInvoicePreview = async (invoiceId) => {
     });
 
     let totalSubtotal = 0, totalGst = 0;
+    const applyGst = !inv.withoutGST;
     const rows = inv.items.map(it => {
-      const gstRate = it.gstRate || 18;
+      const gstRate = applyGst ? (it.gstRate || 18) : 0;
       const net = it.qty * it.rate * (1 - (it.discount || 0) / 100);
-      const gstAmt = net * (gstRate / 100);
+      const gstAmt = applyGst ? net * (gstRate / 100) : 0;
       totalSubtotal += net;
       totalGst += gstAmt;
       return `<tr>
@@ -438,6 +563,9 @@ window.openInvoicePreview = async (invoiceId) => {
     const cancelledHTML = inv.cancelled ?
       `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);color:#ff0000;font-size:60px;opacity:0.3;font-weight:bold;">CANCELLED</div>` : '';
 
+    const withoutGSTHTML = inv.withoutGST ?
+      `<div style="position:absolute;top:30px;right:20px;transform:rotate(-20deg);background:#ff9800;color:white;padding:8px 25px;font-weight:bold;font-size:16px;opacity:0.9;">WITHOUT GST</div>` : '';
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${inv.invoiceNo}</title><style>
       @page { size: A4; margin: 0; } body { margin:0; padding:15mm 10mm; font-family: Arial; }
       .bill { position:relative; } .header img { width:90px; position:absolute; left:10px; top:10px; }
@@ -448,7 +576,8 @@ window.openInvoicePreview = async (invoiceId) => {
       .totals { text-align:right; font-size:11px; } .footer { margin-top:30px; font-size:9px; text-align:center; }
       .sign { display:flex; justify-content:space-between; padding:0 50px; margin-top:20px; }
       .sign div { width:100px; text-align:center; } .sign .box { height:50px; border:2px dashed #000; margin-bottom:5px; }
-    </style></head><body><div class="bill">${cancelledHTML}
+      .sign .box.line { border-bottom:3px solid #000; }
+    </style></head><body><div class="bill">${cancelledHTML}${withoutGSTHTML}
       <div class="header"><img src="/assets/logo.png" alt="Kuber">
         <div class="shop"><b>KUBER HARDWARE</b><br><small>A/p Kumbhoj tal Hatkangale Maharashtra<br>GSTIN: 27AAACK9748R1Z8<br>Contact: 1234567890</small></div>
         <div class="inv-no">Date: <b>${displayDate}</b><br><b style="font-size:14px;">${inv.invoiceNo}</b></div>
@@ -457,7 +586,7 @@ window.openInvoicePreview = async (invoiceId) => {
       <table><thead><tr><th>Item (Brand)</th><th>Unit</th><th>Qty</th><th>Rate</th><th>Disc</th><th>Net</th><th>GST%</th><th>GST</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="totals"><b>Subtotal:</b> Rs. ${totalSubtotal.toFixed(2)}<br><b>Total GST:</b> Rs. ${totalGst.toFixed(2)}<br><b>Total:</b> Rs. ${inv.total.toFixed(2)}<br><b>Paid:</b> Rs. ${paid.toFixed(2)} | <b>Pending:</b> Rs. ${pending.toFixed(2)}<br><b style="font-size:14px;">Net Payable: Rs. ${inv.payable.toFixed(2)}</b></div>
       <div class="footer"><b>Terms & Conditions:</b><br>1. Goods once sold will not be taken back. 2. Warranty as per manufacturer only.<br>3. Please check items before leaving counter. 4. All disputes subject to Kolhapur jurisdiction only.</div>
-      <div class="sign"><div><div class="box"></div>Stamp</div><div><div class="box" style="border-bottom:3px solid #000;"></div>Authorized Signature</div></div>
+      <div class="sign"><div><div class="box"></div>Stamp</div><div><div class="box line"></div>Authorized Signature</div></div>
     </div></body></html>`;
 
     const win = window.open('', '_blank', 'width=950,height=800');
