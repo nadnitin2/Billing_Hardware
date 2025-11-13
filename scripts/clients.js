@@ -248,25 +248,81 @@ window.showTransactions = async (clientId, clientName) => {
   }
 };
 
+
+
+// Helper: dd-mm-yyyy → Date object
+function parseDDMMYYYY(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.trim().split('-');
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts.map(Number);
+  if (isNaN(dd) || isNaN(mm) || isNaN(yyyy)) return null;
+  const date = new Date(yyyy, mm - 1, dd);
+  if (isNaN(date.getTime())) return null;
+  return date;
+}
+
+// Apply Filter Button
+applyFilterBtn.onclick = () => {
+  renderTransactions(allPaymentsGlobal);
+};
+
+// Clear Filter
+clearFilterBtn.onclick = () => {
+  fromDateInput.value = '';
+  toDateInput.value = '';
+  renderTransactions(allPaymentsGlobal);
+};
+
+// MAIN FIX: renderTransactions with PROPER DATE FILTER
 function renderTransactions(payments) {
-  const from = fromDateInput.value ? new Date(fromDateInput.value) : null;
-  const to = toDateInput.value ? new Date(toDateInput.value) : null;
+  // Parse dates properly (dd-mm-yyyy)
+  const fromInput = fromDateInput.value;
+  const toInput = toDateInput.value;
 
-  let filtered = payments.filter(p => {
-    const d = p.paymentDateObj;
-    if (from && d < from) return false;
-    if (to) {
-      const toEnd = new Date(to);
-      toEnd.setHours(23, 59, 59, 999);
-      if (d > toEnd) return false;
-    }
-    return true;
-  });
+  const fromDate = fromInput ? parseDDMMYYYY(fromInput) : null;
+  const toDate = toInput ? parseDDMMYYYY(toInput) : null;
 
+  // Validation
+  if (fromInput && !fromDate) {
+    alert("Invalid From Date! Use dd-mm-yyyy format.");
+    return;
+  }
+  if (toInput && !toDate) {
+    alert("Invalid To Date! Use dd-mm-yyyy format.");
+    return;
+  }
+  if (fromDate && toDate && fromDate > toDate) {
+    alert("From Date cannot be greater than To Date!");
+    return;
+  }
+
+  let filtered = payments;
+
+  if (fromDate || toDate) {
+    filtered = payments.filter(p => {
+      const paymentDate = p.paymentDateObj;
+
+      if (fromDate) {
+        const fromStart = new Date(fromDate);
+        fromStart.setHours(0, 0, 0, 0);
+        if (paymentDate < fromStart) return false;
+      }
+      if (toDate) {
+        const toEnd = new Date(toDate);
+        toEnd.setHours(23, 59, 59, 999);
+        if (paymentDate > toEnd) return false;
+      }
+      return true;
+    });
+  }
+
+  // Clear table
   transactionTableBody.innerHTML = filtered.length === 0
-    ? `<tr><td colspan="7" class="text-center text-muted">No transactions found</td></tr>`
+    ? `<tr><td colspan="7" class="text-center text-muted">No transactions found in selected date range</td></tr>`
     : '';
 
+  // Render rows
   filtered.forEach(p => {
     const row = document.createElement('tr');
     row.className = p.cancelled ? 'table-secondary' : '';
@@ -296,6 +352,7 @@ function renderTransactions(payments) {
     transactionTableBody.appendChild(row);
   });
 }
+
 // PDF – GST % + Total madhe cancelled nako
 downloadPDFBtn.addEventListener('click', () => {
   showLoader("Generating PDF...");
