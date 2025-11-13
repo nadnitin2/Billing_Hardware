@@ -30,6 +30,7 @@ const payModalClient = document.getElementById('payModalClient');
 const payModalInv = document.getElementById('payModalInv');
 const payModalDue = document.getElementById('payModalDue');
 const payAmt = document.getElementById('payAmt');
+const recordPaymentBtn = document.getElementById("recordPayment"); // New reference for loader
 
 let invoiceItems = [];
 let globalGstRate = 0.18;
@@ -159,7 +160,17 @@ function onItemChange() {
 
 // Populate Clients & Items
 async function populateClientsAndItems() {
+  // Add loading state for client selects
+  const loadingOption = '<option selected disabled>Loading clients...</option>';
+  clientSelect.innerHTML = loadingOption;
+  searchClientList.innerHTML = loadingOption;
+
   const clientSnap = await getDocs(clientCol);
+
+  // Clear loading state and add All option for searchClientList
+  clientSelect.innerHTML = '';
+  searchClientList.innerHTML = '<option value="All">All Clients</option>';
+
   clientSnap.forEach(dc => {
     const c = dc.data();
     clientMap[c.name] = c;
@@ -189,7 +200,7 @@ async function populateClientsAndItems() {
 window.loadInvoices = async () => {
   const clientName = searchClientList.value;
   if (!clientName || clientName === 'All') {
-    invoiceListTable.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Select client</td></tr>`;
+    invoiceListTable.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Select client to load invoices</td></tr>`;
     invoiceCache = [];
     return;
   }
@@ -448,6 +459,7 @@ async function saveInvoiceHandler(e) {
   } catch (err) {
     console.error(err);
     alert("Error: " + err.message);
+    btn.innerHTML = 'Generate Invoice';
     btn.disabled = false;
   }
 }
@@ -469,48 +481,61 @@ document.getElementById("recordPayment").addEventListener("click", async () => {
   const amt = parseFloat(payAmt.value) || 0;
   if (amt <= 0) return alert("Enter valid amount!");
 
-  const ref = doc(db, 'invoices', currentInvoiceId);
-  const snap = await getDoc(ref);
-  const inv = snap.data();
-  const newPaid = (inv.paidAmount || 0) + amt;
-
-  await updateDoc(ref, {
-    paidAmount: newPaid,
-    cleared: newPaid >= inv.payable,
-    payments: arrayUnion({
-      amount: amt,
-      mode: document.getElementById('payMode')?.value || 'Cash',
-      txn: document.getElementById('payTxn')?.value || '',
-      remarks: document.getElementById('payRemarks')?.value || '',
-      timestamp: new Date(),
-      date: getTodayDDMMYYYY()
-    })
-  });
+  // Start Loading State
+  recordPaymentBtn.disabled = true;
+  recordPaymentBtn.textContent = 'Recording...';
 
   try {
-    const clientQuery = query(clientCol, where("name", "==", inv.client));
-    const clientSnap = await getDocs(clientQuery);
-    if (!clientSnap.empty) {
-      await updateDoc(clientSnap.docs[0].ref, {
-        transactions: arrayUnion({
-          invoiceId: currentInvoiceId,
-          invoiceNo: inv.invoiceNo,
-          date: new Date(),
-          amount: amt,
-          mode: document.getElementById('payMode')?.value || 'Cash',
-          txn: document.getElementById('payTxn')?.value || '',
-          remarks: document.getElementById('payRemarks')?.value || '',
-          cancelled: inv.cancelled || false
-        })
-      });
-    }
-  } catch (err) {
-    console.log("Client history update skipped:", err);
-  }
+    const ref = doc(db, 'invoices', currentInvoiceId);
+    const snap = await getDoc(ref);
+    const inv = snap.data();
+    const newPaid = (inv.paidAmount || 0) + amt;
 
-  bootstrap.Modal.getInstance(document.getElementById('payModal')).hide();
-  alert("Payment recorded!");
-  await loadInvoices();
+    await updateDoc(ref, {
+      paidAmount: newPaid,
+      cleared: newPaid >= inv.payable,
+      payments: arrayUnion({
+        amount: amt,
+        mode: document.getElementById('payMode')?.value || 'Cash',
+        txn: document.getElementById('payTxn')?.value || '',
+        remarks: document.getElementById('payRemarks')?.value || '',
+        timestamp: new Date(),
+        date: getTodayDDMMYYYY()
+      })
+    });
+
+    try {
+      const clientQuery = query(clientCol, where("name", "==", inv.client));
+      const clientSnap = await getDocs(clientQuery);
+      if (!clientSnap.empty) {
+        await updateDoc(clientSnap.docs[0].ref, {
+          transactions: arrayUnion({
+            invoiceId: currentInvoiceId,
+            invoiceNo: inv.invoiceNo,
+            date: new Date(),
+            amount: amt,
+            mode: document.getElementById('payMode')?.value || 'Cash',
+            txn: document.getElementById('payTxn')?.value || '',
+            remarks: document.getElementById('payRemarks')?.value || '',
+            cancelled: inv.cancelled || false
+          })
+        });
+      }
+    } catch (err) {
+      console.log("Client history update skipped:", err);
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('payModal')).hide();
+    alert("Payment recorded!");
+    await loadInvoices();
+  } catch (error) {
+    console.error("Payment recording failed:", error);
+    alert("Error recording payment: " + error.message);
+  } finally {
+    // End Loading State
+    recordPaymentBtn.textContent = 'Record Payment';
+    recordPaymentBtn.disabled = false;
+  }
 });
 
 // INIT
