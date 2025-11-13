@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,14 +9,26 @@
   <script type="module" src="../scripts/clients.js"></script>
   <script type="module" src="../scripts/auth-check.js"></script>
   <style>
-    .transaction-row:hover { background-color: #f8f9fa; cursor: pointer; }
-    .cancelled-amount { text-decoration: line-through; color: #999; }
-    .badge-small { font-size: 0.7rem; }
+    .transaction-row:hover {
+      background-color: #f8f9fa;
+      cursor: pointer;
+    }
+
+    .cancelled-amount {
+      text-decoration: line-through;
+      color: #999;
+    }
+
+    .badge-small {
+      font-size: 0.7rem;
+    }
   </style>
 </head>
+
 <body>
   <!-- Bootstrap Loading Overlay -->
-  <div id="globalLoader" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-90" style="z-index: 9999;">
+  <div id="globalLoader" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-90"
+    style="z-index: 9999;">
     <div class="d-flex flex-column align-items-center justify-content-center h-100">
       <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
         <span class="visually-hidden">Loading...</span>
@@ -47,11 +60,14 @@
     <div class="table-responsive">
       <div class="input-group mb-3" style="max-width: 400px;">
         <span class="input-group-text">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
-            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search"
+            viewBox="0 0 16 16">
+            <path
+              d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
           </svg>
         </span>
-        <input type="text" id="clientSearch" class="form-control form-control-sm" placeholder="Search by Name, Mobile, Account No...">
+        <input type="text" id="clientSearch" class="form-control form-control-sm"
+          placeholder="Search by Name, Mobile, Account No...">
       </div>
 
       <table class="table table-bordered table-striped">
@@ -98,7 +114,7 @@
 
       <div class="table-responsive">
         <table class="table table-sm table-bordered">
-          <thead class="table-light">
+          <thead>
             <tr>
               <th>Date</th>
               <th>Invoice</th>
@@ -106,6 +122,7 @@
               <th>Mode</th>
               <th>Txn ID</th>
               <th>Remarks</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody id="transactionTableBody">
@@ -135,4 +152,5 @@
     });
   </script>
 </body>
+
 </html>
