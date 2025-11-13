@@ -79,6 +79,8 @@
       padding: 16px;
       border-radius: 14px;
       border: 1px solid #e2e8f0;
+      position: relative !important;
+      z-index: 1000 !important;
     }
 
     .form-control,
@@ -164,50 +166,57 @@
       border-left: 5px solid var(--danger);
     }
 
-    .search-results {
-      position: absolute;
-      top: 100%;
-      left: 0;
+    .client-search-wrapper {
+      position: relative;
       width: 300px;
-      max-height: 260px;
+      z-index: 9999999;
+    }
+
+    #clientSearchResults {
+      position: absolute;
+      top: 100% !important;
+      left: 0 !important;
+      width: 100% !important;
+      max-height: 360px;
       overflow-y: auto;
       background: white;
-      border: 1px solid #ddd;
-      border-radius: 14px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-      z-index: 1000;
+      border: 2px solid #3b82f6;
+      border-top: none;
+      border-radius: 0 0 16px 16px;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+      z-index: 9999999 !important;
+      margin-top: -1px;
       display: none;
-      margin-top: 6px;
+      padding: 12px 0;
     }
 
     .search-result-item {
-      padding: 12px 16px;
-      border-bottom: 1px solid #eee;
+      padding: 16px 20px;
+      border-bottom: 1px solid #f0f0f0;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s ease;
     }
 
     .search-result-item:hover {
-      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+      background: #dbeafe;
+      padding-left: 28px;
+      border-left: 6px solid #3b82f6;
+    }
+
+    .search-result-item:last-child {
+      border-bottom: none;
     }
 
     .search-result-name {
-      font-weight: 600;
-      color: var(--primary);
-      font-size: 1rem;
+      font-weight: 700;
+      color: #1e40af;
+      font-size: 1.05rem;
     }
 
     .search-result-contact {
-      font-size: 0.85rem;
-      color: #64748b;
-    }
-
-    .gradient-text {
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-weight: 800;
+      font-size: 0.9rem;
+      color: #475569;
+      margin-top: 4px;
     }
 
     @media (max-width: 768px) {
@@ -221,8 +230,9 @@
         margin: 5px 0;
       }
 
-      .search-results {
-        width: 100%;
+      .client-search-wrapper,
+      #clientSearchResults {
+        width: 100% !important;
       }
     }
   </style>
@@ -232,8 +242,6 @@
 
   <div class="container-fluid">
 
-
-    <!-- Daily Summary -->
     <div class="report-card">
       <div class="card-header">
         <span>Daily Sales Summary</span>
@@ -272,18 +280,17 @@
       </div>
     </div>
 
-    <!-- Client-wise Report -->
     <div class="report-card">
       <div class="card-header">
         <span>Client-wise Report</span>
         <i class="bi bi-person-lines-fill"></i>
       </div>
       <div class="card-body">
-        <div class="filter-bar position-relative">
-          <div class="position-relative" style="width:300px;">
-            <input type="text" id="clientSearchInput" class="form-control" placeholder="Search Client..."
-              autocomplete="off">
-            <div id="clientSearchResults" class="search-results"></div>
+        <div class="filter-bar">
+          <div class="client-search-wrapper">
+            <input type="text" id="clientSearchInput" class="form-control"
+              placeholder="Search Client by Name / Mobile..." autocomplete="off">
+            <div id="clientSearchResults"></div>
           </div>
           <input type="hidden" id="selectedClientName">
           <input type="date" id="clientFromDate" class="form-control" style="width:160px;">
@@ -316,7 +323,6 @@
       </div>
     </div>
 
-    <!-- Item-wise Sales -->
     <div class="report-card">
       <div class="card-header">
         <span>Item-wise Sales + GST Report</span>
@@ -353,7 +359,6 @@
       </div>
     </div>
 
-    <!-- Outstanding -->
     <div class="report-card">
       <div class="card-header">
         <span>Outstanding Payments</span>
@@ -398,7 +403,6 @@
       </div>
     </div>
 
-    <!-- CANCELLED Invoices -->
     <div class="report-card cancelled-table">
       <div class="card-header" style="background: linear-gradient(135deg, var(--danger), #ef4444);">
         <span>CANCELLED Invoices</span>
@@ -434,6 +438,7 @@
         </div>
       </div>
     </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -467,75 +472,114 @@
       });
     }
 
+    // Helper function for aggressive normalization
+    function normalizeString(str) {
+      if (!str) return '';
+      // FIX: सर्व Whitespace आणि Non-Alphanumeric characters काढून टाकणे
+      let cleaned = str.replace(/[^a-zA-Z0-9]/g, '');
+      return cleaned.toLowerCase();
+    }
+
     async function loadClients() {
+      showLoading("Loading Client Data...");
       try {
         const snap = await db.collection("clients").get();
         allClients = [];
         clientContactMap = {};
         snap.forEach(doc => {
           const d = doc.data();
-          clientContactMap[d.name] = d.contact || 'N/A';
-          allClients.push({
-            name: d.name,
-            contact: d.contact || '',
-            full: `${d.name} (${d.contact || 'No Contact'})`
-          });
+          const name = (d.name || '').toString().trim();
+          const contact = (d.contact || '').toString().trim();
+
+          if (name) {
+            clientContactMap[name] = contact || 'N/A';
+            allClients.push({
+              name: name,
+              // नावातून सर्व स्पेसेस आणि विशिष्ट चिन्हे काढून lowercase मध्ये सेव्ह करणे
+              nameNormalized: normalizeString(name),
+              contact: contact
+            });
+          }
         });
-      } catch (err) { console.error(err); }
+        Swal.close();
+      } catch (err) {
+        console.error(err);
+        Swal.fire("Error", "Could not load client data.", "error");
+      }
     }
 
-    // Live Search
-    document.getElementById('clientSearchInput').addEventListener('input', function () {
-      const query = this.value.trim();
+    async function setupClientSearchAfterLoad() {
+      await loadClients();
+
+      const input = document.getElementById('clientSearchInput');
       const resultsDiv = document.getElementById('clientSearchResults');
-      resultsDiv.innerHTML = '';
-      document.getElementById('selectedClientName').value = '';
 
-      if (!query) {
-        resultsDiv.style.display = 'none';
-        return;
-      }
+      input.addEventListener('input', function () {
+        const query = this.value.trim();
+        //console.log(`\n[DEBUG] User typed: "${query}"`);
+        resultsDiv.innerHTML = '';
+        document.getElementById('selectedClientName').value = '';
 
-      const filtered = allClients.filter(c =>
-        c.name.toLowerCase().includes(query.toLowerCase()) ||
-        c.contact.includes(query.replace(/\D/g, ''))
-      ).slice(0, 8);
-
-      if (filtered.length === 0) {
-        resultsDiv.innerHTML = '<div class="p-3 text-muted small text-center">No client found</div>';
-        resultsDiv.style.display = 'block';
-        return;
-      }
-
-      filtered.forEach(client => {
-        const div = document.createElement('div');
-        div.className = 'search-result-item';
-        div.innerHTML = `<div class="search-result-name">${client.name}</div><div class="search-result-contact">${client.contact || 'No contact'}</div>`;
-        div.onclick = () => {
-          document.getElementById('clientSearchInput').value = client.name;
-          document.getElementById('selectedClientName').value = client.name;
+        if (!query) {
           resultsDiv.style.display = 'none';
-        };
-        resultsDiv.appendChild(div);
+          return;
+        }
+
+        const queryNormalized = normalizeString(query);
+        const mobileQuery = query.replace(/\D/g, '');  // फक्त नंबर
+
+        //console.log(`[DEBUG] Query Normalized: "${queryNormalized}" | Mobile Query: "${mobileQuery}" (length: ${mobileQuery.length})`);
+
+        const filtered = allClients.filter(c => {
+          const nameMatch = c.nameNormalized.includes(queryNormalized);
+
+          // FIX: फक्त 3+ नंबर असतील तरच mobile search कर
+          const contactMatch = mobileQuery.length >= 3 && c.contact.includes(mobileQuery);
+
+          //console.log(`[DEBUG] Checking "${c.name}" → nameMatch: ${nameMatch}, contactMatch: ${contactMatch}`);
+          return nameMatch || contactMatch;
+        }).slice(0, 10);
+
+        if (filtered.length === 0) {
+          resultsDiv.innerHTML = '<div class="p-3 text-muted small text-center">No client found</div>';
+          resultsDiv.style.display = 'block';
+          return;
+        }
+
+        filtered.forEach(client => {
+          const div = document.createElement('div');
+          div.className = 'search-result-item';
+          // येथे मूळ (Original) नाव वापरले जात आहे.
+          div.innerHTML = `<div class="search-result-name">${client.name}</div><div class="search-result-contact">${client.contact || 'No contact'}</div>`;
+          div.onclick = () => {
+            input.value = client.name;
+            document.getElementById('selectedClientName').value = client.name;
+            resultsDiv.innerHTML = '';
+            resultsDiv.style.display = 'none';
+          };
+          resultsDiv.appendChild(div);
+        });
+        resultsDiv.style.display = 'block';
       });
-      resultsDiv.style.display = 'block';
-    });
 
-    document.addEventListener('click', (e) => {
-      if (!document.getElementById('clientSearchInput').parentElement.contains(e.target)) {
-        document.getElementById('clientSearchResults').style.display = 'none';
-      }
-    });
+      input.addEventListener('focus', function () {
+        if (this.value.trim()) this.dispatchEvent(new Event('input'));
+      });
 
-    // FULLY INDEX-FREE + NO DEFAULT DATE + CLEAN TIMESTAMP
+      document.addEventListener('click', (e) => {
+        if (!input.parentElement.contains(e.target)) {
+          resultsDiv.style.display = 'none';
+        }
+      });
+    }
+
     async function loadDailySummary() {
       let from = toDDMMYYYY(document.getElementById('summaryFromDate').value);
       let to = toDDMMYYYY(document.getElementById('summaryToDate').value);
 
       showLoading("Loading All Sales...");
       try {
-        const snap = await db.collection('invoices').get(); // NO WHERE = NO INDEX NEEDED
-
+        const snap = await db.collection('invoices').get();
         const tbody = document.querySelector('#dailySummaryTable tbody');
         tbody.innerHTML = '';
 
@@ -558,15 +602,15 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-          <td><strong>${d.invoiceNo}</strong></td>
-          <td>${d.client}</td>
-          <td>${d.date}</td>
-          <td>${d.gstRate || 18}%</td>
-          <td>Rs.${payable.toFixed(2)}</td>
-          <td>Rs.${paidAmt.toFixed(2)}</td>
-          <td>Rs.${pending.toFixed(2)}</td>
-          <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
-        `;
+                        <td><strong>${d.invoiceNo}</strong></td>
+                        <td>${d.client}</td>
+                        <td>${d.date}</td>
+                        <td>${d.gstRate || 18}%</td>
+                        <td>Rs.${payable.toFixed(2)}</td>
+                        <td>Rs.${paidAmt.toFixed(2)}</td>
+                        <td>Rs.${pending.toFixed(2)}</td>
+                        <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
+                    `;
           tbody.appendChild(tr);
         });
 
@@ -574,14 +618,14 @@
           tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No invoices found</td></tr>';
         } else {
           tbody.insertAdjacentHTML('beforeend', `
-          <tr class="table-primary fw-bold fs-5">
-            <td colspan="4">GRAND TOTAL</td>
-            <td>Rs.${total.toFixed(2)}</td>
-            <td>Rs.${paid.toFixed(2)}</td>
-            <td>Rs.${pendingTotal.toFixed(2)}</td>
-            <td></td>
-          </tr>
-        `);
+                        <tr class="table-primary fw-bold fs-5">
+                            <td colspan="4">GRAND TOTAL</td>
+                            <td>Rs.${total.toFixed(2)}</td>
+                            <td>Rs.${paid.toFixed(2)}</td>
+                            <td>Rs.${pendingTotal.toFixed(2)}</td>
+                            <td></td>
+                        </tr>
+                    `);
         }
         Swal.close();
       } catch (err) {
@@ -598,8 +642,7 @@
 
       showLoading(`Loading ${clientName}'s Report...`);
       try {
-        const snap = await db.collection('invoices').get(); // NO WHERE = NO INDEX
-
+        const snap = await db.collection('invoices').get();
         const tbody = document.querySelector('#clientReportTable tbody');
         tbody.innerHTML = '';
 
@@ -619,14 +662,14 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-          <td>${d.invoiceNo}</td>
-          <td>${d.date}</td>
-          <td>${d.gstRate || 18}%</td>
-          <td>Rs.${payable.toFixed(2)}</td>
-          <td>Rs.${paidAmt.toFixed(2)}</td>
-          <td>Rs.${(payable - paidAmt).toFixed(2)}</td>
-          <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
-        `;
+                        <td>${d.invoiceNo}</td>
+                        <td>${d.date}</td>
+                        <td>${d.gstRate || 18}%</td>
+                        <td>Rs.${payable.toFixed(2)}</td>
+                        <td>Rs.${paidAmt.toFixed(2)}</td>
+                        <td>Rs.${(payable - paidAmt).toFixed(2)}</td>
+                        <td><span class="badge bg-${d.cleared ? 'success' : 'danger'}">${d.cleared ? 'Cleared' : 'Pending'}</span></td>
+                    `;
           tbody.appendChild(tr);
         });
 
@@ -634,14 +677,14 @@
           tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No data</td></tr>';
         } else {
           tbody.insertAdjacentHTML('beforeend', `
-          <tr class="table-success fw-bold">
-            <td colspan="3">GRAND TOTAL</td>
-            <td>Rs.${total.toFixed(2)}</td>
-            <td>Rs.${paid.toFixed(2)}</td>
-            <td>Rs.${(total - paid).toFixed(2)}</td>
-            <td></td>
-          </tr>
-        `);
+                        <tr class="table-success fw-bold">
+                            <td colspan="3">GRAND TOTAL</td>
+                            <td>Rs.${total.toFixed(2)}</td>
+                            <td>Rs.${paid.toFixed(2)}</td>
+                            <td>Rs.${(total - paid).toFixed(2)}</td>
+                            <td></td>
+                        </tr>
+                    `);
         }
         Swal.close();
       } catch (err) {
@@ -656,7 +699,6 @@
       showLoading("Generating GST Report...");
       try {
         const snap = await db.collection('invoices').get();
-
         const itemMap = {};
         let grandNet = 0, grandGST = 0, grandTotal = 0;
 
@@ -699,14 +741,14 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-          <td><strong>${it.name}</strong><br><small class="text-muted">${it.brand}</small></td>
-          <td>${it.qty}</td>
-          <td>${it.unit}</td>
-          <td>Rs.${it.net.toFixed(2)}</td>
-          <td><span class="badge bg-info">${it.gstRate}%</span></td>
-          <td>Rs.${it.gst.toFixed(2)}</td>
-          <td class="fw-bold">Rs.${it.total.toFixed(2)}</td>
-        `;
+                        <td><strong>${it.name}</strong><br><small class="text-muted">${it.brand}</small></td>
+                        <td>${it.qty}</td>
+                        <td>${it.unit}</td>
+                        <td>Rs.${it.net.toFixed(2)}</td>
+                        <td><span class="badge bg-info">${it.gstRate}%</span></td>
+                        <td>Rs.${it.gst.toFixed(2)}</td>
+                        <td class="fw-bold">Rs.${it.total.toFixed(2)}</td>
+                    `;
           tbody.appendChild(tr);
         });
 
@@ -714,14 +756,14 @@
           tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No sales</td></tr>';
         } else {
           tbody.insertAdjacentHTML('beforeend', `
-          <tr class="table-dark text-white fw-bold fs-5">
-            <td colspan="3">GRAND TOTAL</td>
-            <td>Rs.${grandNet.toFixed(2)}</td>
-            <td></td>
-            <td>Rs.${grandGST.toFixed(2)}</td>
-            <td>Rs.${grandTotal.toFixed(2)}</td>
-          </tr>
-        `);
+                        <tr class="table-dark text-white fw-bold fs-5">
+                            <td colspan="3">GRAND TOTAL</td>
+                            <td>Rs.${grandNet.toFixed(2)}</td>
+                            <td></td>
+                            <td>Rs.${grandGST.toFixed(2)}</td>
+                            <td>Rs.${grandTotal.toFixed(2)}</td>
+                        </tr>
+                    `);
         }
         Swal.close();
       } catch (err) {
@@ -734,8 +776,7 @@
       const filter = document.querySelector('input[name="outFilter"]:checked').value;
 
       try {
-        const snap = await db.collection('invoices').get(); // NO WHERE = NO INDEX
-
+        const snap = await db.collection('invoices').get();
         const tbody = document.querySelector('#outstandingTable tbody');
         tbody.innerHTML = '';
 
@@ -751,15 +792,15 @@
 
           const tr = document.createElement('tr');
           tr.innerHTML = `
-          <td>${d.invoiceNo}</td>
-          <td>${d.client}</td>
-          <td>${contact}</td>
-          <td>${d.date}</td>
-          <td>Rs.${(d.payable || 0).toFixed(2)}</td>
-          <td>Rs.${paid.toFixed(2)}</td>
-          <td>Rs.${pending.toFixed(2)}</td>
-          <td><span class="badge bg-${pending <= 0 ? 'success' : 'danger'}">${pending <= 0 ? 'Cleared' : 'Pending'}</span></td>
-        `;
+                        <td>${d.invoiceNo}</td>
+                        <td>${d.client}</td>
+                        <td>${contact}</td>
+                        <td>${d.date}</td>
+                        <td>Rs.${(d.payable || 0).toFixed(2)}</td>
+                        <td>Rs.${paid.toFixed(2)}</td>
+                        <td>Rs.${pending.toFixed(2)}</td>
+                        <td><span class="badge bg-${pending <= 0 ? 'success' : 'danger'}">${pending <= 0 ? 'Cleared' : 'Pending'}</span></td>
+                    `;
           tbody.appendChild(tr);
         });
 
@@ -791,14 +832,14 @@
           const tr = document.createElement('tr');
           tr.className = 'table-danger';
           tr.innerHTML = `
-          <td><strong>${d.invoiceNo}</strong></td>
-          <td>${d.client}</td>
-          <td>${clientContactMap[d.client] || 'N/A'}</td>
-          <td>${d.date}</td>
-          <td>${cancelledDate}</td>
-          <td>Rs.${(d.payable || 0).toFixed(2)}</td>
-          <td>${d.cancelReason || 'Not specified'}</td>
-        `;
+                        <td><strong>${d.invoiceNo}</strong></td>
+                        <td>${d.client}</td>
+                        <td>${clientContactMap[d.client] || 'N/A'}</td>
+                        <td>${d.date}</td>
+                        <td>${cancelledDate}</td>
+                        <td>Rs.${(d.payable || 0).toFixed(2)}</td>
+                        <td>${d.cancelReason || 'Not specified'}</td>
+                    `;
           tbody.appendChild(tr);
         });
 
@@ -817,42 +858,27 @@
         return Swal.fire("No Data", "Table is empty!", "info");
       }
 
-      // Clone table
       const tableClone = table.cloneNode(true);
-
-      // FORCE GST % as TEXT (18% not 0.18)
       tableClone.querySelectorAll('td, th').forEach(cell => {
         const text = cell.innerText.trim();
-
-        // जर cell मध्ये % असेल तर ती TEXT बनव
-        if (text.includes('%') && !isNaN(text.replace('%', ''))) {
-          const num = parseFloat(text.replace('%', ''));
-          cell.innerText = num + '%'; // 18%
-          cell.setAttribute('data-t', 's'); // XLSX ला सांगतो की हे string आहे
+        if (text.includes('Rs.')) {
+          cell.innerText = text.replace('Rs.', '').trim();
         }
-
-        // Currency ला पण clean कर (₹ remove for Excel)
-        if (text.includes('₹')) {
-          cell.innerText = text.replace('₹', '').trim();
+        if (cell.querySelector('.badge.bg-info')) {
+          cell.innerText = cell.innerText;
         }
       });
 
-      // Create workbook
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.table_to_sheet(tableClone);
 
-      // Force GST column as TEXT
       const range = XLSX.utils.decode_range(ws['!ref']);
       for (let R = range.s.r; R <= range.e.r; ++R) {
         for (let C = range.s.c; C <= range.e.c; ++C) {
           const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-          if (!ws[cellAddress]) continue;
-
-          const cellText = ws[cellAddress].v;
-          if (typeof cellText === 'string' && cellText.includes('%')) {
-            ws[cellAddress].t = 's'; // string
-            ws[cellAddress].v = cellText;
-            ws[cellAddress].z = '0%'; // format as percentage
+          const cell = ws[cellAddress];
+          if (cell && typeof cell.v === 'string' && cell.v.includes('%')) {
+            cell.t = 's';
           }
         }
       }
@@ -879,10 +905,8 @@
       doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
     }
 
-    // NO DEFAULT DATE + AUTO LOAD CLIENTS
-    window.onload = () => {
-      loadClients();
-      // DEFAULT DATE REMOVED - USER WILL CLICK LOAD
+    window.onload = async () => {
+      await setupClientSearchAfterLoad();
     };
   </script>
 </body>
